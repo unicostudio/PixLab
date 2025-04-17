@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bead Color Changer</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Bead Color Changer</h1>
+        </header>
+        
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="color-count-controls">
+                    <h3>Total Colors</h3>
+                    <div class="control-group">
+                        <label for="currentColorCount">Current:</label>
+                        <span id="currentColorCount" class="color-count">0</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="targetColorCount">Target:</label>
+                        <input type="number" id="targetColorCount" min="1" max="120" value="10">
+                        <button id="applyColorReduction">Apply</button>
+                    </div>
+                    <div class="control-group">
+                        <button id="clearSelection" class="action-button">Clear Selection</button>
+                    </div>
+                    <div class="history-controls">
+                        <button id="undoButton" class="action-button">← Undo</button>
+                        <button id="redoButton" class="action-button">Redo →</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="middle-panel">
+                <div class="grid-container">
+                    <canvas id="hexGrid" width="800" height="600"></canvas>
+                    <div class="grid-controls">
+                        <button id="clearGrid">Clear Grid</button>
+                        <button id="exportPNG">Export PNG</button>
+                        <button id="saveGrid">Save Grid</button>
+                        <button id="loadGrid">Load Grid</button>
+                        <button id="loadImage">Load Image</button>
+                        <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="right-panel">
+                <div class="color-palette">
+                    <h3>Color Palette</h3>
+                    <div class="selected-color-display">
+                        <div class="selected-color-preview" id="selectedColorPreview"></div>
+                        <div class="selected-color-hex" id="selectedColorHex" title="Click to copy">#FFFFFF</div>
+                    </div>
+                    <div id="colorPaletteContainer"></div>
+                    <div class="palette-controls">
+                        <button id="exportPalette" class="small-button">Exp Pal</button>
+                        <button id="importPalette" class="small-button">Imp Pal</button>
+                        <input type="file" id="paletteInput" accept=".json" style="display: none;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Color Picker Modal -->
+        <div id="colorPickerModal" class="modal">
+            <div class="modal-content">
+                <span class="close-button">&times;</span>
+                <h3>Color Picker</h3>
+                <div class="color-wheel-container">
+                    <canvas id="colorWheel" width="300" height="300"></canvas>
+                </div>
+                <div class="color-preview">
+                    <div class="preview-group">
+                        <label>Selected Color:</label>
+                        <div id="colorPreview"></div>
+                    </div>
+                    <div class="preview-group">
+                        <label>Hex Code:</label>
+                        <input type="text" id="hexInput" maxlength="7">
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button id="saveColor">Save Color</button>
+                    <button id="cancelColor">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Load JavaScript files -->
+    <script src="js/colorUtils.js"></script>
+    <script src="js/hexGrid.js"></script>
+    <script src="js/colorPalette.js"></script>
+    <script src="js/colorPicker.js"></script>
+    <script src="js/imageProcessing.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
