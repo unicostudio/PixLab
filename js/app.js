@@ -10,6 +10,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize the color palette
     const colorPalette = new ColorPalette('colorPaletteContainer', hexGrid);
     
+    // Make the color palette globally accessible
+    window.colorPalette = colorPalette;
+    
     // Store a reference to the color palette in its container for access from other components
     document.getElementById('colorPaletteContainer').parentNode.colorPalette = colorPalette;
     

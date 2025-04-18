@@ -178,6 +178,53 @@ const ColorUtils = {
             return colors;
         }
         
+        // Check if we already have a color palette (after first image load)
+        if (window.colorPalette && window.colorPalette.colors && window.colorPalette.colors.length > 0) {
+            console.log('Using existing color palette for reduction');
+            
+            // Get the current palette colors
+            const paletteColors = window.colorPalette.colors.filter(color => color !== '#FFFFFF');
+            console.log('Available palette colors:', paletteColors);
+            
+            // If we have palette colors, use them for mapping
+            if (paletteColors.length > 0) {
+                // Create a set of unique colors to reduce (up to k)
+                const uniqueColors = new Set();
+                
+                // First try to map all colors to the closest palette color
+                const colorMapping = {};
+                
+                for (const color of colors) {
+                    // Find the closest palette color
+                    const closestColor = this.findClosestColor(color, paletteColors);
+                    colorMapping[color] = closestColor;
+                    uniqueColors.add(closestColor);
+                    
+                    // If we've reached our target number of colors, stop adding new mappings
+                    if (uniqueColors.size >= k) {
+                        break;
+                    }
+                }
+                
+                // Get the resulting unique colors (up to k)
+                const resultColors = Array.from(uniqueColors).slice(0, k);
+                
+                // If we still don't have enough colors, add some from the palette
+                while (resultColors.length < k && resultColors.length < paletteColors.length) {
+                    const nextColor = paletteColors[resultColors.length];
+                    if (!resultColors.includes(nextColor)) {
+                        resultColors.push(nextColor);
+                    }
+                }
+                
+                console.log('Reduced to these palette colors:', resultColors);
+                return resultColors;
+            }
+        }
+        
+        // For the first image load, or if no palette is available, use the original k-means clustering
+        console.log('No palette available or first image load - using k-means clustering');
+        
         // Convert colors to RGB arrays for clustering
         const rgbColors = colors.map(hex => {
             const rgb = this.hexToRgb(hex);
@@ -185,16 +232,89 @@ const ColorUtils = {
         });
         
         // Simple k-means implementation
-        // Initialize centroids randomly
+        // Initialize centroids using most frequent colors
         let centroids = [];
-        const usedIndices = new Set();
         
-        // Select k random distinct colors as initial centroids
-        while (centroids.length < k) {
-            const idx = Math.floor(Math.random() * rgbColors.length);
-            if (!usedIndices.has(idx)) {
-                usedIndices.add(idx);
-                centroids.push([...rgbColors[idx]]);
+        // Count color frequency
+        const colorFrequency = {};
+        colors.forEach(color => {
+            colorFrequency[color] = (colorFrequency[color] || 0) + 1;
+        });
+        
+        // Sort colors by frequency (most frequent first)
+        const sortedColors = Object.keys(colorFrequency).sort((a, b) => {
+            return colorFrequency[b] - colorFrequency[a];
+        });
+        
+        // Select the k most frequent colors as initial centroids
+        for (let i = 0; i < Math.min(k, sortedColors.length); i++) {
+            const rgb = this.hexToRgb(sortedColors[i]);
+            centroids.push([rgb.r, rgb.g, rgb.b]);
+        }
+        
+        // If we don't have enough distinct colors, add some colors from the original image
+        console.log('Initial centroids:', centroids);
+        console.log('RGB colors length:', rgbColors.length);
+        
+        if (centroids.length < k) {
+            // Try to get original image colors from the ColorPalette instance
+            let originalImageColors = [];
+            
+            // Check if we can access the ColorPalette instance
+            if (window.colorPalette && window.colorPalette.originalImageColors) {
+                // Get colors from the original image
+                originalImageColors = Object.keys(window.colorPalette.originalImageColors);
+                console.log('Original image colors available:', originalImageColors.length);
+            }
+            
+            // If we have original image colors, use them
+            if (originalImageColors.length > 0) {
+                // Sort by frequency (most used first)
+                originalImageColors.sort((a, b) => {
+                    const countA = window.colorPalette.originalImageColors[a] || 0;
+                    const countB = window.colorPalette.originalImageColors[b] || 0;
+                    return countB - countA; // Most frequent first
+                });
+                
+                console.log('Original image colors sorted by frequency:', originalImageColors.slice(0, 10));
+                
+                // Add colors from the original image until we have enough
+                for (let i = 0; i < originalImageColors.length && centroids.length < k; i++) {
+                    const color = originalImageColors[i];
+                    const rgb = this.hexToRgb(color);
+                    
+                    // Check if this color is already in centroids
+                    let isDuplicate = false;
+                    for (const centroid of centroids) {
+                        if (centroid[0] === rgb.r && centroid[1] === rgb.g && centroid[2] === rgb.b) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!isDuplicate) {
+                        centroids.push([rgb.r, rgb.g, rgb.b]);
+                        console.log('Added color from original image:', color);
+                    }
+                }
+            }
+            
+            // If we still don't have enough, use colors from the current image
+            if (centroids.length < k) {
+                console.log('Still need more colors, using colors from current image');
+                const usedIndices = new Set();
+                while (centroids.length < k) {
+                    const idx = Math.floor(Math.random() * rgbColors.length);
+                    if (!usedIndices.has(idx)) {
+                        usedIndices.add(idx);
+                        centroids.push([...rgbColors[idx]]);
+                    }
+                    
+                    // Prevent infinite loop if we run out of colors
+                    if (usedIndices.size >= rgbColors.length) {
+                        break;
+                    }
+                }
             }
         }
         
