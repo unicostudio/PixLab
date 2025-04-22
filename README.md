@@ -1,4 +1,4 @@
-# Bead Color Changer - Web Version
+#  PixLab - Web Version
 
 A web-based implementation of the Bead Color Changer application that works entirely in the browser. Design bead art using a hexagonal grid with advanced color management.
 
