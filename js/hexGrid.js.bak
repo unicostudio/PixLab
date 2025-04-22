@@ -1,0 +1,604 @@
+/**
+ * HexGrid Implementation
+ * Modified to display beads with cut corners and inner rings
+ * while maintaining compatibility with original functionality
+ */
+
+class HexGrid {
+    /**
+     * Initialize the hex grid
+     * @param {String} canvasId - ID of the canvas element
+     * @param {Number} cols - Number of columns in the grid
+     * @param {Number} rows - Number of rows in the grid
+     */
+    constructor(canvasId, cols = 64, rows = 40) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.size = 10; // Size of hexagons
+        
+        // Set initial cols and rows
+        this.cols = cols;
+        this.rows = rows;
+        
+        // Calculate grid dimensions
+        this.calculateDimensions();
+        
+        // Initialize colors
+        this.hexColors = {}; // Map of (col,row) to color
+        this.selectedCells = new Set(); // Set of selected (col,row) coordinates
+        this.isSelecting = false; // Flag for drag selection
+        
+        // History for undo/redo
+        this.history = [];
+        this.historyIndex = -1;
+        
+        // Default color
+        this.defaultColor = '#FFFFFF';
+        
+        // Initialize grid with default color
+        this.initializeGrid();
+        
+        // Set up event listeners
+        this.setupEventListeners();
+        
+        // Callbacks for color selection
+        this.colorSelectedCallbacks = [];
+        
+        // Initial render
+        this.render();
+    }
+    
+    /**
+     * Calculate dimensions based on hex size
+     */
+    calculateDimensions() {
+        // Get the container dimensions
+        const containerWidth = this.canvas.width;
+        const containerHeight = this.canvas.height;
+        
+        // Calculate the optimal hex size to fill the container
+        const maxWidthHexSize = containerWidth / ((this.cols * 3/4) + 0.25) / 2;
+        const maxHeightHexSize = containerHeight / (this.rows * Math.sqrt(3) / 2 + 0.5) / 2;
+        
+        // Use the smaller of the two to ensure we can fit both dimensions
+        this.size = Math.min(maxWidthHexSize, maxHeightHexSize) * 0.95; // 95% to add some margin
+        
+        // Width of a hex is 2 * size
+        this.hexWidth = this.size * 2;
+        
+        // Height of a hex is sqrt(3) * size
+        this.hexHeight = this.size * Math.sqrt(3);
+        
+        // Horizontal distance between column centers
+        this.colWidth = this.hexWidth * 3/4;
+        
+        // Vertical distance between row centers
+        this.rowHeight = this.hexHeight;
+        
+        // Calculate the actual grid size
+        this.gridWidth = this.colWidth * this.cols;
+        this.gridHeight = this.rowHeight * this.rows;
+        
+        // Center the grid in the canvas
+        this.offsetX = (containerWidth - this.gridWidth) / 2;
+        this.offsetY = (containerHeight - this.gridHeight) / 2;
+    }
+    
+    /**
+     * Initialize the grid with default colors
+     */
+    initializeGrid() {
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
+                this.hexColors[\`\${col},\${row}\`] = this.defaultColor;
+            }
+        }
+    }
+    
+    /**
+     * Set up event listeners for the canvas
+     */
+    setupEventListeners() {
+        this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
+        this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
+        this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
+        this.canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
+        
+        // Prevent context menu on right-click
+        this.canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            return false;
+        });
+    }
+    
+    /**
+     * Add a callback for when a color is selected
+     * @param {Function} callback - Function to call when a color is selected
+     */
+    addColorSelectedCallback(callback) {
+        this.colorSelectedCallbacks.push(callback);
+    }
+    
+    /**
+     * Notify all registered callbacks about a selected color
+     * @param {String} color - The selected color
+     */
+    notifyColorSelected(color) {
+        for (const callback of this.colorSelectedCallbacks) {
+            callback(color);
+        }
+    }
+    
+    /**
+     * Handle mouse down event
+     * @param {MouseEvent} event - Mouse event
+     */
+    handleMouseDown(event) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
+        const cell = this.pixelToHex(x, y);
+        if (!cell) return;
+        
+        // Right-click to remove from selection
+        if (event.button === 2) {
+            const key = \`\${cell.col},\${cell.row}\`;
+            this.selectedCells.delete(key);
+            this.render();
+            return;
+        }
+        
+        this.isSelecting = true;
+        
+        // If shift is not held, clear the current selection
+        if (!event.shiftKey) {
+            this.selectedCells.clear();
+        }
+        
+        // Add the clicked cell to the selection
+        const key = \`\${cell.col},\${cell.row}\`;
+        this.selectedCells.add(key);
+        
+        // Notify about the selected color
+        const color = this.hexColors[key] || this.defaultColor;
+        this.notifyColorSelected(color);
+        
+        this.render();
+    }
+    
+    /**
+     * Handle mouse move event
+     * @param {MouseEvent} event - Mouse event
+     */
+    handleMouseMove(event) {
+        if (!this.isSelecting) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
+        const cell = this.pixelToHex(x, y);
+        if (cell) {
+            this.selectedCells.add(\`\${cell.col},\${cell.row}\`);
+            this.render();
+        }
+    }
+    
+    /**
+     * Handle mouse up event
+     */
+    handleMouseUp() {
+        this.isSelecting = false;
+    }
+    
+    /**
+     * Handle double click event to select all cells of the same color
+     * @param {MouseEvent} event - Mouse event
+     */
+    handleDoubleClick(event) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
+        const cell = this.pixelToHex(x, y);
+        if (!cell) return;
+        
+        const key = \`\${cell.col},\${cell.row}\`;
+        const targetColor = this.hexColors[key];
+        
+        // Clear current selection
+        this.selectedCells.clear();
+        
+        // Select all cells with the same color
+        for (const [cellKey, color] of Object.entries(this.hexColors)) {
+            if (color === targetColor) {
+                this.selectedCells.add(cellKey);
+            }
+        }
+        
+        // Notify any listeners about the selected color
+        this.notifyColorSelected(targetColor);
+        
+        // Render to show the selection
+        this.render();
+    }
+    
+    /**
+     * Convert pixel coordinates to hex grid coordinates
+     * @param {Number} x - X coordinate in pixels
+     * @param {Number} y - Y coordinate in pixels
+     * @returns {Object|null} Object with col and row properties, or null if outside grid
+     */
+    pixelToHex(x, y) {
+        // Adjust for offset
+        const adjX = x - this.offsetX;
+        const adjY = y - this.offsetY;
+        
+        // Calculate the row first (easier)
+        let row = Math.round(adjY / this.rowHeight);
+        
+        // Adjust x for the staggered columns
+        let adjColX = adjX;
+        if (row % 2 === 1) {
+            // Odd rows are offset by half a column width
+            adjColX -= this.colWidth / 2;
+        }
+        
+        // Calculate the column
+        let col = Math.round(adjColX / this.colWidth);
+        
+        // Check if the calculated cell is valid
+        if (col >= 0 && col < this.cols && row >= 0 && row < this.rows) {
+            return { col, row };
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Convert hex grid coordinates to pixel coordinates
+     * @param {Number} col - Column index
+     * @param {Number} row - Row index
+     * @returns {Object} Object with x and y properties
+     */
+    hexToPixel(col, row) {
+        let x = this.offsetX + col * this.colWidth;
+        
+        // Adjust x for odd rows
+        if (row % 2 === 1) {
+            x += this.colWidth / 2;
+        }
+        
+        const y = this.offsetY + row * this.rowHeight;
+        
+        return { x, y };
+    }
+    
+    /**
+     * Draw a hexagon at the specified coordinates
+     * Modified to draw a bead with cut corners and inner ring
+     * @param {Number} x - X coordinate of the center
+     * @param {Number} y - Y coordinate of the center
+     * @param {String} fillColor - Fill color
+     * @param {Boolean} isSelected - Whether the hexagon is selected
+     */
+    drawHexagon(x, y, fillColor, isSelected) {
+        const ctx = this.ctx;
+        const size = this.size;
+        
+        // Calculate the corner cut size (about 20% of the bead size)
+        const cornerCut = size * 0.2;
+        
+        // Calculate the coordinates for a square with cut corners
+        const points = [
+            // Top side (left to right)
+            { x: x - size + cornerCut, y: y - size },
+            { x: x + size - cornerCut, y: y - size },
+            // Top-right corner
+            { x: x + size, y: y - size + cornerCut },
+            // Right side (top to bottom)
+            { x: x + size, y: y + size - cornerCut },
+            // Bottom-right corner
+            { x: x + size - cornerCut, y: y + size },
+            // Bottom side (right to left)
+            { x: x - size + cornerCut, y: y + size },
+            // Bottom-left corner
+            { x: x - size, y: y + size - cornerCut },
+            // Left side (bottom to top)
+            { x: x - size, y: y - size + cornerCut }
+        ];
+        
+        // Draw the outer shape (bead with cut corners)
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.closePath();
+        
+        // Fill the bead
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+        
+        // Draw the inner ring (slightly darker version of the fill color)
+        const innerSize = size * 0.8; // 80% of the original size
+        const cornerCutInner = innerSize * 0.2;
+        
+        // Calculate darker color for inner ring
+        let darkerColor;
+        if (fillColor === '#FFFFFF') {
+            // For white, use a light gray
+            darkerColor = '#E0E0E0';
+        } else {
+            // For other colors, darken by 15%
+            const rgb = this.hexToRgb(fillColor);
+            const darkenFactor = 0.85; // 15% darker
+            darkerColor = \`rgb(\${Math.floor(rgb.r * darkenFactor)}, \${Math.floor(rgb.g * darkenFactor)}, \${Math.floor(rgb.b * darkenFactor)})\`;
+        }
+        
+        // Inner points
+        const innerPoints = [
+            // Top side (left to right)
+            { x: x - innerSize + cornerCutInner, y: y - innerSize },
+            { x: x + innerSize - cornerCutInner, y: y - innerSize },
+            // Top-right corner
+            { x: x + innerSize, y: y - innerSize + cornerCutInner },
+            // Right side (top to bottom)
+            { x: x + innerSize, y: y + innerSize - cornerCutInner },
+            // Bottom-right corner
+            { x: x + innerSize - cornerCutInner, y: y + innerSize },
+            // Bottom side (right to left)
+            { x: x - innerSize + cornerCutInner, y: y + innerSize },
+            // Bottom-left corner
+            { x: x - innerSize, y: y + innerSize - cornerCutInner },
+            // Left side (bottom to top)
+            { x: x - innerSize, y: y - innerSize + cornerCutInner }
+        ];
+        
+        // Draw the inner ring
+        ctx.beginPath();
+        ctx.moveTo(innerPoints[0].x, innerPoints[0].y);
+        for (let i = 1; i < innerPoints.length; i++) {
+            ctx.lineTo(innerPoints[i].x, innerPoints[i].y);
+        }
+        ctx.closePath();
+        
+        ctx.strokeStyle = darkerColor;
+        ctx.lineWidth = size * 0.1; // Width of the inner ring
+        ctx.stroke();
+        
+        // Stroke for selection
+        if (isSelected) {
+            ctx.strokeStyle = '#00008B'; // Dark blue for selection
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+    }
+    
+    /**
+     * Render the entire grid
+     */
+    render() {
+        // Clear canvas
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Draw each hexagon
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
+                const center = this.hexToPixel(col, row);
+                const key = \`\${col},\${row}\`;
+                const color = this.hexColors[key] || this.defaultColor;
+                const isSelected = this.selectedCells.has(key);
+                
+                this.drawHexagon(center.x, center.y, color, isSelected);
+            }
+        }
+    }
+    
+    /**
+     * Apply a color to the selected cells
+     * @param {String} color - Hex color string
+     */
+    applyColorToSelection(color) {
+        if (this.selectedCells.size === 0) return;
+        
+        // Save current state for undo
+        this.saveState();
+        
+        // Apply color to selected cells
+        for (const key of this.selectedCells) {
+            this.hexColors[key] = color;
+        }
+        
+        this.render();
+    }
+    
+    /**
+     * Save the current grid state for undo/redo
+     */
+    saveState() {
+        // Remove any future states if we're in the middle of history
+        if (this.historyIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.historyIndex + 1);
+        }
+        
+        // Clone the current colors
+        const colorsCopy = JSON.parse(JSON.stringify(this.hexColors));
+        
+        // Add to history
+        this.history.push({
+            hexColors: colorsCopy,
+            timestamp: Date.now()
+        });
+        this.historyIndex = this.history.length - 1;
+        
+        // Limit history size
+        if (this.history.length > 50) {
+            this.history.shift();
+            this.historyIndex--;
+        }
+    }
+    
+    /**
+     * Undo the last action
+     */
+    undo() {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            this.hexColors = JSON.parse(JSON.stringify(this.history[this.historyIndex].hexColors));
+            this.render();
+        }
+    }
+    
+    /**
+     * Redo the last undone action
+     */
+    redo() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.historyIndex++;
+            this.hexColors = JSON.parse(JSON.stringify(this.history[this.historyIndex].hexColors));
+            this.render();
+        }
+    }
+    
+    /**
+     * Clear the grid (set all cells to default color)
+     */
+    clearGrid() {
+        // Save current state for undo
+        this.saveState();
+        
+        // Reset all cells to default color
+        this.initializeGrid();
+        
+        // Clear selection
+        this.selectedCells.clear();
+        
+        // Render the updated grid
+        this.render();
+    }
+    
+    /**
+     * Export the grid to a PNG image
+     * @returns {String} Data URL of the PNG image
+     */
+    exportToPNG() {
+        // Create a temporary canvas with the same dimensions
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = this.canvas.width;
+        tempCanvas.height = this.canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Copy the current canvas content
+        tempCtx.drawImage(this.canvas, 0, 0);
+        
+        // Return the data URL
+        return tempCanvas.toDataURL('image/png');
+    }
+    
+    /**
+     * Save the grid to a JSON object
+     * @returns {Object} JSON object with grid data
+     */
+    saveToJSON() {
+        return {
+            cols: this.cols,
+            rows: this.rows,
+            hexColors: this.hexColors,
+            timestamp: Date.now()
+        };
+    }
+    
+    /**
+     * Load the grid from a JSON object
+     * @param {Object} data - JSON object with grid data
+     */
+    loadFromJSON(data) {
+        if (!data || !data.hexColors) return;
+        
+        // Save current state for undo
+        this.saveState();
+        
+        // Update grid properties if they exist
+        if (data.cols && data.rows) {
+            this.cols = data.cols;
+            this.rows = data.rows;
+            this.calculateDimensions();
+        }
+        
+        // Update colors
+        this.hexColors = data.hexColors;
+        
+        // Clear selection
+        this.selectedCells.clear();
+        
+        // Render the updated grid
+        this.render();
+    }
+    
+    /**
+     * Convert a hex color string to RGB values
+     * @param {String} hex - Hex color string (e.g., "#FF5500")
+     * @returns {Object} Object with r, g, b properties
+     */
+    hexToRgb(hex) {
+        // Remove # if present
+        hex = hex.replace(/^#/, '');
+        
+        // Parse the hex values
+        const bigint = parseInt(hex, 16);
+        const r = (bigint >> 16) & 255;
+        const g = (bigint >> 8) & 255;
+        const b = bigint & 255;
+        
+        return { r, g, b };
+    }
+    
+    /**
+     * Get all unique colors used in the grid
+     * @returns {Array} Array of hex color strings
+     */
+    getAllColors() {
+        const uniqueColors = new Set();
+        
+        for (const color of Object.values(this.hexColors)) {
+            uniqueColors.add(color);
+        }
+        
+        return Array.from(uniqueColors);
+    }
+    
+    /**
+     * Get counts of each color used in the grid
+     * @returns {Object} Map of color to count
+     */
+    getColorCounts() {
+        const colorCounts = {};
+        
+        for (const color of Object.values(this.hexColors)) {
+            colorCounts[color] = (colorCounts[color] || 0) + 1;
+        }
+        
+        return colorCounts;
+    }
+    
+    /**
+     * Apply a color mapping to the grid
+     * @param {Object} colorMap - Map of old colors to new colors
+     */
+    applyColorMapping(colorMap) {
+        // Save current state for undo
+        this.saveState();
+        
+        // Apply the mapping to all cells
+        for (const [key, oldColor] of Object.entries(this.hexColors)) {
+            if (colorMap[oldColor]) {
+                this.hexColors[key] = colorMap[oldColor];
+            }
+        }
+        
+        // Render the updated grid
+        this.render();
+    }
+}

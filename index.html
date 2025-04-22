@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bead Color Changer</title>
+    <title>Bead Color Changer Utils</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
     <div class="app-container">
         <header>
-            <h1>Bead Color Changer</h1>
+            <h1>Bead Color Changer Utils</h1>
         </header>
         
         <div class="main-content">
@@ -29,18 +29,22 @@
                         <button id="clearSelection" class="action-button">Clear Selection</button>
                     </div>
                     <div class="history-controls">
-                        <button id="undoButton" class="action-button">← Undo</button>
-                        <button id="redoButton" class="action-button">Redo →</button>
+                        <div class="history-buttons" style="visibility: hidden;">
+                            <button id="undoButton" class="action-button">← Undo</button>
+                            <button id="redoButton" class="action-button">Redo →</button>
+                        </div>
                     </div>
                 </div>
             </div>
             
             <div class="middle-panel">
                 <div class="grid-container">
-                    <canvas id="hexGrid" width="800" height="600"></canvas>
+                    <canvas id="gemGrid" width="800" height="600"></canvas>
                     <div class="grid-controls">
                         <button id="clearGrid">Clear Grid</button>
                         <button id="exportPNG">Export PNG</button>
+                        <button id="savePNG">Save PNG (Color Only)</button>
+                        <button id="save64x40">Save 64x40</button>
                         <button id="saveGrid">Save Grid</button>
                         <button id="loadGrid">Load Grid</button>
                         <button id="loadImage">Load Image</button>
@@ -94,10 +98,10 @@
     
     <!-- Load JavaScript files -->
     <script src="js/colorUtils.js"></script>
-    <script src="js/hexGrid.js"></script>
+    <script src="js/gemGrid.js"></script>
     <script src="js/colorPalette.js"></script>
     <script src="js/colorPicker.js"></script>
     <script src="js/imageProcessing.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/appGem.js"></script>
 </body>
 </html>

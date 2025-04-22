@@ -5,11 +5,10 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize the hex grid
-    const hexGrid = new HexGrid('hexGrid', 64, 40);
-    
+    const gemGrid = new GemGrid('gemGrid', 64, 40); 
     
     // Initialize the color palette
-    const colorPalette = new ColorPalette('colorPaletteContainer', hexGrid);
+    const colorPalette = new ColorPalette('colorPaletteContainer', gemGrid);
     
     // Make the color palette globally accessible
     window.colorPalette = colorPalette;
@@ -21,64 +20,94 @@ document.addEventListener('DOMContentLoaded', function() {
     ColorPickerWheel.init();
     
     // Set up event listeners for grid controls
-    setupGridControls(hexGrid, colorPalette);
+    setupGridControls(gemGrid, colorPalette);
     
     // Set up keyboard shortcuts
-    setupKeyboardShortcuts(hexGrid);
+    setupKeyboardShortcuts(gemGrid);
 });
 
 /**
  * Set up event listeners for grid controls
- * @param {HexGrid} hexGrid - The hex grid instance
+ * @param {gemGrid} gemGrid - The hex grid instance
  * @param {ColorPalette} colorPalette - The color palette instance
  */
-function setupGridControls(hexGrid, colorPalette) {
+function setupGridControls(gemGrid, colorPalette) {
     // Clear selection button
     document.getElementById('clearSelection').addEventListener('click', function() {
-        hexGrid.selectedCells.clear();
-        hexGrid.render();
+        gemGrid.selectedCells.clear();
+        gemGrid.render();
     });
     
     // Undo button
     document.getElementById('undoButton').addEventListener('click', function() {
-        if (hexGrid.historyIndex > 0) {
-            hexGrid.historyIndex--;
-            const historyState = hexGrid.history[hexGrid.historyIndex];
-            hexGrid.hexColors = JSON.parse(JSON.stringify(historyState.hexColors));
-            hexGrid.render();
+        if (gemGrid.historyIndex > 0) {
+            gemGrid.historyIndex--;
+            const historyState = gemGrid.history[gemGrid.historyIndex];
+            gemGrid.hexColors = JSON.parse(JSON.stringify(historyState.hexColors));
+            gemGrid.render();
         }
     });
     
     // Redo button
     document.getElementById('redoButton').addEventListener('click', function() {
-        if (hexGrid.historyIndex < hexGrid.history.length - 1) {
-            hexGrid.historyIndex++;
-            const historyState = hexGrid.history[hexGrid.historyIndex];
-            hexGrid.hexColors = JSON.parse(JSON.stringify(historyState.hexColors));
-            hexGrid.render();
+        if (gemGrid.historyIndex < gemGrid.history.length - 1) {
+            gemGrid.historyIndex++;
+            const historyState = gemGrid.history[gemGrid.historyIndex];
+            gemGrid.hexColors = JSON.parse(JSON.stringify(historyState.hexColors));
+            gemGrid.render();
         }
     });
     // Clear grid button
     document.getElementById('clearGrid').addEventListener('click', function() {
         if (confirm('Are you sure you want to clear the grid? This cannot be undone.')) {
-            hexGrid.clearGrid();
+            gemGrid.clearGrid();
             colorPalette.updateColorCountDisplay();
         }
     });
     
     // Export PNG button
     document.getElementById('exportPNG').addEventListener('click', function() {
-        const dataURL = hexGrid.exportToPNG();
-        
+        const dataURL = gemGrid.exportToPNG();
         const link = document.createElement('a');
         link.href = dataURL;
         link.download = 'bead_art_' + new Date().toISOString().slice(0, 10) + '.png';
         link.click();
     });
+
+    // Save PNG (Color Only) button
+    document.getElementById('savePNG').addEventListener('click', function() {
+        try {
+            alert('Save PNG (Color Only) button clicked.');
+            const dataURL = gemGrid.exportColorOnlyPNG();
+            if (!dataURL || !dataURL.startsWith('data:image/png')) {
+                alert('PNG generation failed.');
+                return;
+            }
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = 'bead_art_color_only_' + new Date().toISOString().slice(0, 10) + '.png';
+            link.click();
+        } catch (e) {
+            alert('Error during Save PNG: ' + e.message);
+        }
+    });
+    
+    // Save 64x40 button
+    document.getElementById('save64x40').addEventListener('click', function() {
+        try {
+            const dataURL = gemGrid.export64x40PNG();
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = 'bead_art_64x40_' + new Date().toISOString().slice(0, 10) + '.png';
+            link.click();
+        } catch (e) {
+            alert('Error during Save 64x40: ' + e.message);
+        }
+    });
     
     // Save grid button
     document.getElementById('saveGrid').addEventListener('click', function() {
-        const gridData = hexGrid.saveToJSON();
+        const gridData = gemGrid.saveToJSON();
         
         // Add palette colors to the saved data
         gridData.palette = colorPalette.getPaletteColors();
@@ -110,7 +139,7 @@ function setupGridControls(hexGrid, colorPalette) {
                     const gridData = JSON.parse(e.target.result);
                     
                     // Load the grid data
-                    hexGrid.loadFromJSON(gridData);
+                    gemGrid.loadFromJSON(gridData);
                     
                     // Load the palette if it exists
                     if (gridData.palette && Array.isArray(gridData.palette)) {
@@ -149,7 +178,7 @@ function setupGridControls(hexGrid, colorPalette) {
         }
         
         // Process the image
-        ImageProcessor.loadImageToGrid(file, hexGrid, colorPalette)
+        ImageProcessor.loadImageToGrid(file, gemGrid, colorPalette)
             .then(() => {
                 alert('Image loaded successfully.');
             })
@@ -164,26 +193,26 @@ function setupGridControls(hexGrid, colorPalette) {
 
 /**
  * Set up keyboard shortcuts
- * @param {HexGrid} hexGrid - The hex grid instance
+ * @param {gemGrid} gemGrid - The hex grid instance
  */
-function setupKeyboardShortcuts(hexGrid) {
+function setupKeyboardShortcuts(gemGrid) {
     document.addEventListener('keydown', function(event) {
         // Ctrl+Z: Undo
         if (event.ctrlKey && event.key === 'z') {
-            hexGrid.undo();
+            gemGrid.undo();
             event.preventDefault();
         }
         
         // Ctrl+Y: Redo
         if (event.ctrlKey && event.key === 'y') {
-            hexGrid.redo();
+            gemGrid.redo();
             event.preventDefault();
         }
         
         // Escape: Clear selection
         if (event.key === 'Escape') {
-            hexGrid.selectedCells.clear();
-            hexGrid.render();
+            gemGrid.selectedCells.clear();
+            gemGrid.render();
             event.preventDefault();
         }
     });

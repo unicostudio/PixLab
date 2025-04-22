@@ -71,10 +71,10 @@ class ColorPalette {
             applyButton.dataset.index = index;
             applyButton.addEventListener('click', () => this.applySelectedColor(index));
             
-            // Add elements to color item
-            colorItem.appendChild(colorBall);
-            colorItem.appendChild(hexInput);
+            // Add elements to color item (swapped order)
             colorItem.appendChild(applyButton);
+            colorItem.appendChild(hexInput);
+            colorItem.appendChild(colorBall);
             
             // Add to container
             this.container.appendChild(colorItem);
@@ -82,6 +82,10 @@ class ColorPalette {
         
         // Update color count display
         this.updateColorCountDisplay();
+        // Save grid state asynchronously after color reduction is complete
+        setTimeout(() => {
+            this.hexGrid.saveState();
+        }, 0);
     }
     
     /**
@@ -201,6 +205,10 @@ class ColorPalette {
         const color = this.colors[index];
         this.hexGrid.applyColorToSelection(color);
         this.updateColorCountDisplay();
+        // Save grid state asynchronously after color reduction is complete
+        setTimeout(() => {
+            this.hexGrid.saveState();
+        }, 0);
     }
     
     /**
@@ -309,47 +317,8 @@ class ColorPalette {
             return;
         }
         
-        // Count frequency of each color in the grid
-        const colorCounts = this.hexGrid.getColorCounts();
-        
-        // Calculate intensity for each color
-        const colorData = Object.entries(colorCounts).map(([color, count]) => {
-            const rgb = ColorUtils.hexToRgb(color);
-            const intensity = rgb.r + rgb.g + rgb.b;
-            return { color, count, intensity };
-        });
-        
-        // Find the most intense color
-        let mostIntenseColor = null;
-        let maxIntensity = -1;
-        
-        colorData.forEach(item => {
-            if (item.intensity > maxIntensity) {
-                maxIntensity = item.intensity;
-                mostIntenseColor = item.color;
-            }
-        });
-        
-        // Create a copy of colorData sorted by intensity (highest to lowest)
-        const colorsByIntensity = [...colorData].sort((a, b) => {
-            return b.intensity - a.intensity; // Sort by intensity (highest first)
-        });
-        
-        // Log the first 30 colors sorted by intensity
-        console.log('First 30 colors by intensity (highest to lowest):');
-        colorsByIntensity.slice(0, 30).forEach((item, index) => {
-            console.log(`${index + 1}. Color: ${item.color}, Intensity: ${item.intensity}, Count: ${item.count}`);
-        });
-        
-        console.log('Most intense color:', mostIntenseColor);
-        
         // Reduce colors using k-means clustering
         const reducedColors = ColorUtils.reduceColors(gridColors, targetCount);
-        
-        // Make sure the most intense color is included in the reduced colors
-        if (mostIntenseColor && !reducedColors.includes(mostIntenseColor)) {
-            reducedColors[reducedColors.length - 1] = mostIntenseColor;
-        }
         
         // Create a mapping from old colors to new colors
         const colorMap = {};
@@ -361,22 +330,16 @@ class ColorPalette {
         // Apply the color mapping to the grid
         this.hexGrid.applyColorMapping(colorMap);
         
-        // Sort reduced colors by frequency in the grid
-        const newColorCounts = this.hexGrid.getColorCounts();
-        const sortedReducedColors = reducedColors.sort((a, b) => {
-            const countA = newColorCounts[a] || 0;
-            const countB = newColorCounts[b] || 0;
-            return countB - countA; // Sort by frequency (most frequent first)
-        });
-        
-        console.log('Sorted reduced colors by frequency:', sortedReducedColors);
-        
-        // Update the palette with the sorted reduced colors
-        this.colors = sortedReducedColors;
+        // Update the palette with the reduced colors
+        this.colors = reducedColors;
         this.createPaletteUI();
         
         // Update color count display
         this.updateColorCountDisplay();
+        // Save grid state asynchronously after color reduction is complete
+        setTimeout(() => {
+            this.hexGrid.saveState();
+        }, 0);
     }
     
     /**
@@ -401,6 +364,10 @@ class ColorPalette {
         
         // Update the color count display
         this.updateColorCountDisplay();
+        // Save grid state asynchronously after color reduction is complete
+        setTimeout(() => {
+            this.hexGrid.saveState();
+        }, 0);
     }
     
     /**
@@ -411,64 +378,32 @@ class ColorPalette {
         // Convert the color counts to an array of [color, count] pairs
         const colorPairs = Object.entries(colorCounts);
         
-        // Process color information for sorting
-        const colorData = colorPairs.map(([color, count]) => {
+        // Sort by count (most used first)
+        colorPairs.sort((a, b) => b[1] - a[1]);
+        
+        // Calculate color intensity for each color
+        const colorIntensities = colorPairs.map(([color, count]) => {
             const rgb = ColorUtils.hexToRgb(color);
-            // We track brightness (sum of RGB values) but primarily sort by frequency
-            const brightness = rgb.r + rgb.g + rgb.b;
-            return { color, count, brightness };
+            // Simple intensity calculation (sum of RGB values)
+            const intensity = rgb.r + rgb.g + rgb.b;
+            return { color, count, intensity };
         });
         
-        // Find the brightest color
-        let brightestColor = null;
-        let maxBrightness = -1;
-        
-        colorData.forEach(item => {
-            if (item.brightness > maxBrightness) {
-                maxBrightness = item.brightness;
-                brightestColor = item.color;
-            }
-        });
-        
-        // Create a copy of colorData sorted by brightness (highest to lowest)
-        const colorsByBrightness = [...colorData].sort((a, b) => {
-            return b.brightness - a.brightness; // Sort by brightness (highest first)
-        });
-        
-        // Log the first 30 colors sorted by intensity
-        console.log('First 30 colors by intensity (highest to lowest):');
-        colorsByIntensity.slice(0, 30).forEach((item, index) => {
-            console.log(`${index + 1}. Color: ${item.color}, Intensity: ${item.intensity}, Count: ${item.count}`);
-        });
-        
-        // Sort by count first, then by brightness for ties
-        colorData.sort((a, b) => {
+        // Sort by count first, then by intensity for ties
+        colorIntensities.sort((a, b) => {
             if (b.count !== a.count) {
-                return b.count - a.count; // Most frequent first
+                return b.count - a.count; // Most used first
             }
-            return b.brightness - a.brightness; // Brightest first for ties
+            return b.intensity - a.intensity; // Most intense first for ties
         });
         
         // Always take exactly 10 colors
         const topColors = [];
         
-        // Log color data for debugging
-        console.log('Colors sorted by frequency:', colorData);
-        
-        // Make sure the brightest color is included
-        if (brightestColor) {
-            topColors.push(brightestColor);
+        // Add the most used colors first (up to 10)
+        for (let i = 0; i < Math.min(10, colorIntensities.length); i++) {
+            topColors.push(colorIntensities[i].color);
         }
-        
-        // Add the most frequent colors (up to 10), skipping the brightest if already added
-        for (let i = 0; i < colorData.length && topColors.length < 10; i++) {
-            const color = colorData[i].color;
-            if (color !== brightestColor || topColors.indexOf(color) === -1) {
-                topColors.push(color);
-            }
-        }
-        
-        console.log('Selected top colors:', topColors);
         
         // If we have fewer than 10 colors, fill with white
         while (topColors.length < 10) {
