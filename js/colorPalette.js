@@ -20,7 +20,7 @@ class ColorPalette {
         this.selectedHexColor = null; // Currently selected hex color for display
         
         // Load the full color palette from JSON
-        this.loadFullColorPalette();
+        this.paletteLoaded = this.loadFullColorPalette();
         
         // Create initial palette UI with just white
         this.createPaletteUI();
@@ -92,7 +92,7 @@ class ColorPalette {
      * Load colors from the full color palette JSON file
      */
     loadFullColorPalette() {
-        fetch('full_color_palette.json')
+        return fetch('full_color_palette.json')
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Failed to load color palette');
@@ -104,6 +104,7 @@ class ColorPalette {
                     // Store the full palette separately
                     this.fullPalette = data.colors.map(color => ColorUtils.normalizeHex(color));
                     console.log(`Loaded ${this.fullPalette.length} colors in full palette`);
+                    return this.fullPalette;
                 } else {
                     console.error('Invalid color palette format');
                     // Fall back to default colors for full palette
@@ -111,6 +112,7 @@ class ColorPalette {
                         '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
                         '#FFFFFF', '#000000', '#888888', '#FF8800', '#00FFAA', '#AA00FF'
                     ];
+                    return this.fullPalette;
                 }
             })
             .catch(error => {
@@ -120,6 +122,7 @@ class ColorPalette {
                     '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
                     '#FFFFFF', '#000000', '#888888', '#FF8800', '#00FFAA', '#AA00FF'
                 ];
+                return this.fullPalette;
             });
     }
     
@@ -147,6 +150,20 @@ class ColorPalette {
         if (this.hexGrid) {
             this.hexGrid.onColorSelected((color) => this.updateSelectedColorDisplay(color));
         }
+    }
+
+    /**
+     * Point the palette to a new grid instance after the grid is recreated.
+     * @param {GemGrid} hexGrid - Active grid instance
+     */
+    setGrid(hexGrid) {
+        this.hexGrid = hexGrid;
+
+        if (this.hexGrid) {
+            this.hexGrid.onColorSelected((color) => this.updateSelectedColorDisplay(color));
+        }
+
+        this.updateColorCountDisplay();
     }
     
     /**

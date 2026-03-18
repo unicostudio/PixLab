@@ -4,7 +4,7 @@ A web-based implementation of the Bead Color Changer application that works enti
 
 ## Features
 
-- **Hexagonal Grid**: Interactive 64x40 hexagonal grid for precise bead art design
+- **Configurable Grid**: Switch between 40x40, 60x60, and 80x80 layouts
 - **Advanced Color Management**: 10-color palette with dynamic color extraction from images
 - **Selection Tools**: Select individual cells or all cells of the same color
 - **History Management**: Undo/redo functionality for design changes

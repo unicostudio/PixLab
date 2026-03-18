@@ -23,15 +23,24 @@
                     <div class="control-group">
                         <label for="targetColorCount">Target:</label>
                         <input type="number" id="targetColorCount" min="1" max="120" value="10">
-                        <button id="applyColorReduction">Apply</button>
+                        <button id="applyColorReduction" type="button">Apply</button>
                     </div>
                     <div class="control-group">
-                        <button id="clearSelection" class="action-button">Clear Selection</button>
+                        <button id="clearSelection" class="action-button" type="button">Clear Selection</button>
+                    </div>
+                    <div class="control-group grid-size-group">
+                        <label for="gridSizeSelect">Grid Size:</label>
+                        <select id="gridSizeSelect">
+                            <option value="40">40x40</option>
+                            <option value="60">60x60</option>
+                            <option value="80">80x80</option>
+                        </select>
+                        <button id="applyGridSize" type="button">Apply</button>
                     </div>
                     <div class="history-controls">
                         <div class="history-buttons" style="visibility: hidden;">
-                            <button id="undoButton" class="action-button">← Undo</button>
-                            <button id="redoButton" class="action-button">Redo →</button>
+                            <button id="undoButton" class="action-button" type="button">← Undo</button>
+                            <button id="redoButton" class="action-button" type="button">Redo →</button>
                         </div>
                     </div>
                 </div>
@@ -41,13 +50,13 @@
                 <div class="grid-container">
                     <canvas id="gemGrid" width="800" height="600"></canvas>
                     <div class="grid-controls">
-                        <button id="clearGrid">Clear Grid</button>
-                        <button id="exportPNG">Export PNG</button>
-                        <button style="display: none;" id="savePNG">Save PNG</button>
-                        <button id="save64x40">Save 64x40</button>
-                        <button id="saveGrid">Save Grid</button>
-                        <button id="loadGrid">Load Grid</button>
-                        <button id="loadImage">Load Image</button>
+                        <button id="clearGrid" type="button">Clear Grid</button>
+                        <button id="exportPNG" type="button">Export PNG</button>
+                        <button style="display: none;" id="savePNG" type="button">Save PNG</button>
+                        <button id="savePixelGrid" type="button">Save Grid PNG</button>
+                        <button id="saveGrid" type="button">Save Grid</button>
+                        <button id="loadGrid" type="button">Load Grid</button>
+                        <button id="loadImage" type="button">Load Image</button>
                         <input type="file" id="imageInput" accept="image/*" style="display: none;">
                     </div>
                 </div>
@@ -62,8 +71,8 @@
                     </div>
                     <div id="colorPaletteContainer"></div>
                     <div class="palette-controls">
-                        <button id="exportPalette" class="small-button">Exp Pal</button>
-                        <button id="importPalette" class="small-button">Imp Pal</button>
+                        <button id="exportPalette" class="small-button" type="button">Exp Pal</button>
+                        <button id="importPalette" class="small-button" type="button">Imp Pal</button>
                         <input type="file" id="paletteInput" accept=".json" style="display: none;">
                     </div>
                 </div>
@@ -89,8 +98,8 @@
                     </div>
                 </div>
                 <div class="modal-buttons">
-                    <button id="saveColor">Save Color</button>
-                    <button id="cancelColor">Cancel</button>
+                    <button id="saveColor" type="button">Save Color</button>
+                    <button id="cancelColor" type="button">Cancel</button>
                 </div>
             </div>
         </div>

@@ -10,7 +10,7 @@ class HexGrid {
      * @param {Number} cols - Number of columns in the grid
      * @param {Number} rows - Number of rows in the grid
      */
-    constructor(canvasId, cols = 64, rows = 40) {
+    constructor(canvasId, cols = 80, rows = 80) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
         this.hexSize = 8; // Initial size, will be calculated dynamically
@@ -52,9 +52,9 @@ class HexGrid {
         const containerHeight = this.canvas.height;
         
         // Calculate the optimal hexagon size to fill the container
-        // with the desired number of hexagons (64x40)
-        const targetCols = 64;
-        const targetRows = 40;
+        // with the configured number of hexagons.
+        const targetCols = this.cols;
+        const targetRows = this.rows;
         
         // Calculate the maximum hexagon size that would allow us to fit the target grid
         const maxWidthHexSize = containerWidth / (targetCols * 0.75 + 0.25) / 2;

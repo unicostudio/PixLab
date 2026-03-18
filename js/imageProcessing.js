@@ -47,6 +47,10 @@ const ImageProcessor = {
      * @param {ColorPalette} colorPalette - The color palette to use
      */
     processImage: function(img, gemGrid, colorPalette) {
+        const catalogPalette = Array.isArray(colorPalette.fullPalette) && colorPalette.fullPalette.length > 0
+            ? colorPalette.fullPalette
+            : null;
+
         // Create a temporary canvas to process the image
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -115,7 +119,9 @@ const ImageProcessor = {
                 
                 // Find closest color in the full palette
                 // We use the full palette loaded from full_color_palette.json
-                const closestColor = ColorUtils.findClosestColor(gemColor, colorPalette.fullPalette);
+                const closestColor = catalogPalette
+                    ? ColorUtils.findClosestColor(gemColor, catalogPalette)
+                    : gemColor;
                 
                 // Set the color in the grid (support both GemGrid and GemGrid)
                 if (gemGrid.gemColors !== undefined) {

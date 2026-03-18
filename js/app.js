@@ -5,7 +5,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize the hex grid
-    const hexGrid = new HexGrid('hexGrid', 64, 40);
+    const hexGrid = new HexGrid('hexGrid', 80, 80);
     
     
     // Initialize the color palette

@@ -231,6 +231,28 @@ button:hover {
     align-items: center;
 }
 
+.grid-size-group {
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.grid-size-group label {
+    min-width: auto;
+    margin-right: 0;
+}
+
+#gridSizeSelect {
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background-color: #fff;
+    font-size: 12px;
+}
+
+#applyGridSize {
+    padding: 4px 10px;
+}
+
 .history-controls {
     display: flex;
     justify-content: space-between;

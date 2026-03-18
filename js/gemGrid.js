@@ -10,7 +10,7 @@ class GemGrid {
      * @param {Number} cols - Number of columns in the grid
      * @param {Number} rows - Number of rows in the grid
      */
-    constructor(canvasId, cols = 64, rows = 40) {
+    constructor(canvasId, cols = 80, rows = 80) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
         this.gemSize = 8; // Initial size, will be calculated dynamically
@@ -52,9 +52,9 @@ class GemGrid {
         const containerHeight = this.canvas.height;
         
         // Calculate the optimal gem size to fill the container
-        // with the desired number of gems (64x40)
-        const targetCols = 64;
-        const targetRows = 40;
+        // with the configured number of gems.
+        const targetCols = this.cols;
+        const targetRows = this.rows;
         
         // Calculate the maximum gem size that would allow us to fit the target grid
         const maxWidthGemSize = containerWidth / targetCols;
@@ -109,15 +109,33 @@ class GemGrid {
      * Set up mouse event listeners
      */
     setupEventListeners() {
-        this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-        this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-        this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-        this.canvas.addEventListener('mouseleave', this.handleMouseUp.bind(this));
-        this.canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
+        this.boundHandleMouseDown = this.handleMouseDown.bind(this);
+        this.boundHandleMouseMove = this.handleMouseMove.bind(this);
+        this.boundHandleMouseUp = this.handleMouseUp.bind(this);
+        this.boundHandleDoubleClick = this.handleDoubleClick.bind(this);
+
+        this.canvas.addEventListener('mousedown', this.boundHandleMouseDown);
+        this.canvas.addEventListener('mousemove', this.boundHandleMouseMove);
+        this.canvas.addEventListener('mouseup', this.boundHandleMouseUp);
+        this.canvas.addEventListener('mouseleave', this.boundHandleMouseUp);
+        this.canvas.addEventListener('dblclick', this.boundHandleDoubleClick);
         
         // Track clicks for double-click detection
         this.lastClickTime = 0;
         this.lastClickCell = null;
+    }
+
+    /**
+     * Remove event listeners before replacing this grid instance.
+     */
+    destroy() {
+        if (!this.canvas) return;
+
+        this.canvas.removeEventListener('mousedown', this.boundHandleMouseDown);
+        this.canvas.removeEventListener('mousemove', this.boundHandleMouseMove);
+        this.canvas.removeEventListener('mouseup', this.boundHandleMouseUp);
+        this.canvas.removeEventListener('mouseleave', this.boundHandleMouseUp);
+        this.canvas.removeEventListener('dblclick', this.boundHandleDoubleClick);
     }
     
     /**
@@ -508,10 +526,10 @@ class GemGrid {
     }
     
     /**
-     * Export grid as a 64x40 pixel PNG (one pixel per cell) with no spacing and no background margin
+     * Export grid as a pixel PNG (one pixel per cell) with no spacing and no background margin
      * @returns {String} Data URL of the PNG image
      */
-    export64x40PNG() {
+    exportPixelGridPNG() {
         const width = this.cols;
         const height = this.rows;
         const tempCanvas = document.createElement('canvas');
