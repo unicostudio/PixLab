@@ -9,9 +9,16 @@ class ColorPalette {
      * @param {String} containerId - ID of the container element
      * @param {HexGrid} hexGrid - Reference to the hex grid
      */
-    constructor(containerId, hexGrid) {
+    constructor(containerId, hexGrid, options = {}) {
         this.container = document.getElementById(containerId);
         this.hexGrid = hexGrid;
+        this.palettePath = options.palettePath;
+        this.allowColorPicker = options.allowColorPicker !== false;
+        this.allowHexEditing = options.allowHexEditing !== false;
+        this.useDetectedColorsAsPalette = options.useDetectedColorsAsPalette !== false;
+        this.useFullPaletteAsDisplay = options.useFullPaletteAsDisplay === true;
+        this.allowLoadedPaletteOverride = options.allowLoadedPaletteOverride !== false;
+        this.useTwoColumnPalette = options.useTwoColumnPalette === true;
         // Always maintain exactly 10 colors (all white by default)
         this.colors = Array(10).fill('#FFFFFF');
         this.fullPalette = []; // Will store all 120 colors from JSON
@@ -20,7 +27,7 @@ class ColorPalette {
         this.selectedHexColor = null; // Currently selected hex color for display
         
         // Load the full color palette from JSON
-        this.loadFullColorPalette();
+        this.paletteLoaded = this.loadFullColorPalette();
         
         // Create initial palette UI with just white
         this.createPaletteUI();
@@ -32,67 +39,169 @@ class ColorPalette {
     /**
      * Create the color palette UI
      */
-    createPaletteUI() {
+    createPaletteUI(options = {}) {
+        const skipGridSave = options.skipGridSave === true;
+
         // Clear container
         this.container.innerHTML = '';
         
-        // Ensure we have exactly 10 colors
-        while (this.colors.length < 10) {
-            this.colors.push('#FFFFFF');
-        }
-        if (this.colors.length > 10) {
-            this.colors = this.colors.slice(0, 10);
+        if (this.useFullPaletteAsDisplay) {
+            this.colors = this.colors.map(color => ColorUtils.normalizeHex(color));
+        } else {
+            // Ensure we have exactly 10 colors
+            while (this.colors.length < 10) {
+                this.colors.push('#FFFFFF');
+            }
+            if (this.colors.length > 10) {
+                this.colors = this.colors.slice(0, 10);
+            }
         }
         
-        // Create color items - always exactly 10
-        this.colors.forEach((color, index) => {
-            const colorItem = document.createElement('div');
-            colorItem.className = 'color-item';
-            
-            // Color ball
-            const colorBall = document.createElement('div');
-            colorBall.className = 'color-ball';
-            colorBall.style.backgroundColor = color;
-            colorBall.dataset.index = index;
-            colorBall.addEventListener('click', () => this.openColorPicker(index));
-            
-            // Hex input
-            const hexInput = document.createElement('input');
-            hexInput.type = 'text';
-            hexInput.className = 'color-hex';
-            hexInput.value = color;
-            hexInput.dataset.index = index;
-            hexInput.addEventListener('change', (e) => this.updateColorFromInput(e.target));
-            
-            // Apply button
-            const applyButton = document.createElement('button');
-            applyButton.className = 'apply-button';
-            applyButton.textContent = 'Apply';
-            applyButton.dataset.index = index;
-            applyButton.addEventListener('click', () => this.applySelectedColor(index));
-            
-            // Add elements to color item (swapped order)
-            colorItem.appendChild(applyButton);
-            colorItem.appendChild(hexInput);
-            colorItem.appendChild(colorBall);
-            
-            // Add to container
-            this.container.appendChild(colorItem);
-        });
+        if (this.useTwoColumnPalette) {
+            this.renderTwoColumnPalette();
+        } else {
+            this.colors.forEach((color, index) => {
+                this.container.appendChild(this.buildColorItem(color, index));
+            });
+        }
         
         // Update color count display
         this.updateColorCountDisplay();
-        // Save grid state asynchronously after color reduction is complete
-        setTimeout(() => {
-            this.hexGrid.saveState();
-        }, 0);
+        if (!skipGridSave) {
+            // Save grid state asynchronously after color reduction is complete
+            setTimeout(() => {
+                this.hexGrid.saveState();
+            }, 0);
+        }
+    }
+
+    buildColorItem(color, index) {
+        const colorItem = document.createElement('div');
+        colorItem.className = 'color-item';
+
+        const colorBall = document.createElement('div');
+        colorBall.className = 'color-ball';
+        colorBall.style.backgroundColor = color;
+        colorBall.dataset.index = index;
+        if (this.allowColorPicker) {
+            colorBall.addEventListener('click', () => this.openColorPicker(index));
+        } else {
+            colorBall.classList.add('is-locked');
+        }
+
+        const hexInput = document.createElement('input');
+        hexInput.type = 'text';
+        hexInput.className = 'color-hex';
+        hexInput.value = color;
+        hexInput.dataset.index = index;
+        if (this.allowHexEditing) {
+            hexInput.addEventListener('change', (e) => this.updateColorFromInput(e.target));
+        } else {
+            hexInput.readOnly = true;
+            hexInput.classList.add('is-readonly');
+            hexInput.setAttribute('aria-readonly', 'true');
+        }
+
+        const applyButton = document.createElement('button');
+        applyButton.className = 'apply-button';
+        applyButton.textContent = 'Apply';
+        applyButton.dataset.index = index;
+        applyButton.addEventListener('click', () => this.applySelectedColor(index));
+
+        colorItem.appendChild(applyButton);
+        colorItem.appendChild(hexInput);
+        colorItem.appendChild(colorBall);
+
+        return colorItem;
+    }
+
+    renderTwoColumnPalette() {
+        const columnData = this.getTwoColumnPaletteData();
+        const columnsWrapper = document.createElement('div');
+        columnsWrapper.className = 'palette-columns';
+
+        columnsWrapper.appendChild(this.buildPaletteColumn(columnData.leftTitle, columnData.leftColors));
+        columnsWrapper.appendChild(this.buildPaletteColumn(columnData.rightTitle, columnData.rightColors));
+
+        this.container.appendChild(columnsWrapper);
+    }
+
+    buildPaletteColumn(title, colors) {
+        const column = document.createElement('div');
+        column.className = 'palette-column';
+
+        if (title) {
+            const heading = document.createElement('div');
+            heading.className = 'palette-column-title';
+            heading.textContent = title;
+            column.appendChild(heading);
+        }
+
+        const list = document.createElement('div');
+        list.className = 'palette-column-list';
+
+        if (colors.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'palette-empty';
+            emptyState.textContent = 'No colors';
+            list.appendChild(emptyState);
+        } else {
+            colors.forEach((color) => {
+                const index = this.colors.indexOf(color);
+                if (index >= 0) {
+                    list.appendChild(this.buildColorItem(color, index));
+                }
+            });
+        }
+
+        column.appendChild(list);
+        return column;
+    }
+
+    getTwoColumnPaletteData() {
+        const paletteColors = [...this.colors];
+        const hasDerivedImageState = Object.keys(this.originalImageColors).length > 0;
+
+        if (!hasDerivedImageState) {
+            const midpoint = Math.ceil(paletteColors.length / 2);
+            return {
+                leftTitle: '',
+                rightTitle: '',
+                leftColors: paletteColors.slice(0, midpoint),
+                rightColors: paletteColors.slice(midpoint)
+            };
+        }
+
+        const usedColorSet = new Set(this.getNormalizedGridColors());
+        return {
+            leftTitle: 'Used',
+            rightTitle: 'Remaining',
+            leftColors: paletteColors.filter((color) => usedColorSet.has(color)),
+            rightColors: paletteColors.filter((color) => !usedColorSet.has(color))
+        };
+    }
+
+    getNormalizedGridColors() {
+        if (!this.hexGrid || !this.hexGrid.gemColors) {
+            return [];
+        }
+
+        return Array.from(
+            new Set(
+                Object.values(this.hexGrid.gemColors).map((color) => ColorUtils.normalizeHex(color))
+            )
+        );
     }
     
     /**
      * Load colors from the full color palette JSON file
      */
     loadFullColorPalette() {
-        fetch('full_color_palette.json')
+        if (!this.palettePath) {
+            return Promise.reject(new Error('No palette path configured'));
+        }
+
+        return fetch(this.palettePath)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Failed to load color palette');
@@ -103,23 +212,20 @@ class ColorPalette {
                 if (Array.isArray(data.colors) && data.colors.length > 0) {
                     // Store the full palette separately
                     this.fullPalette = data.colors.map(color => ColorUtils.normalizeHex(color));
+                    if (this.useFullPaletteAsDisplay) {
+                        this.colors = [...this.fullPalette];
+                        this.createPaletteUI({ skipGridSave: true });
+                    }
                     console.log(`Loaded ${this.fullPalette.length} colors in full palette`);
+                    return this.fullPalette;
                 } else {
-                    console.error('Invalid color palette format');
-                    // Fall back to default colors for full palette
-                    this.fullPalette = [
-                        '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
-                        '#FFFFFF', '#000000', '#888888', '#FF8800', '#00FFAA', '#AA00FF'
-                    ];
+                    throw new Error('Invalid color palette format');
                 }
             })
             .catch(error => {
                 console.error('Error loading color palette:', error);
-                // Fall back to default colors for full palette
-                this.fullPalette = [
-                    '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
-                    '#FFFFFF', '#000000', '#888888', '#FF8800', '#00FFAA', '#AA00FF'
-                ];
+                this.fullPalette = [];
+                return this.fullPalette;
             });
     }
     
@@ -127,14 +233,21 @@ class ColorPalette {
      * Set up event listeners for palette controls
      */
     setupEventListeners() {
-        // Export palette button
-        document.getElementById('exportPalette').addEventListener('click', () => this.exportPalette());
-        
-        // Import palette button
-        document.getElementById('importPalette').addEventListener('click', () => this.importPalette());
-        
-        // Import palette file input
-        document.getElementById('paletteInput').addEventListener('change', (e) => this.handlePaletteFileSelect(e));
+        const exportPaletteButton = document.getElementById('exportPalette');
+        const importPaletteButton = document.getElementById('importPalette');
+        const paletteInput = document.getElementById('paletteInput');
+
+        if (exportPaletteButton) {
+            exportPaletteButton.addEventListener('click', () => this.exportPalette());
+        }
+
+        if (importPaletteButton) {
+            importPaletteButton.addEventListener('click', () => this.importPalette());
+        }
+
+        if (paletteInput) {
+            paletteInput.addEventListener('change', (e) => this.handlePaletteFileSelect(e));
+        }
         
         // Apply color reduction button
         document.getElementById('applyColorReduction').addEventListener('click', () => this.applyColorReduction());
@@ -148,12 +261,34 @@ class ColorPalette {
             this.hexGrid.onColorSelected((color) => this.updateSelectedColorDisplay(color));
         }
     }
+
+    /**
+     * Point the palette to a new grid instance after the grid is recreated.
+     * @param {GemGrid} hexGrid - Active grid instance
+     */
+    setGrid(hexGrid) {
+        this.hexGrid = hexGrid;
+
+        if (this.hexGrid) {
+            this.hexGrid.onColorSelected((color) => this.updateSelectedColorDisplay(color));
+        }
+
+        if (this.useTwoColumnPalette) {
+            this.createPaletteUI({ skipGridSave: true });
+        }
+
+        this.updateColorCountDisplay();
+    }
     
     /**
      * Open the color picker for a specific color
      * @param {Number} index - Index of the color in the palette
      */
     openColorPicker(index) {
+        if (!this.allowColorPicker) {
+            return;
+        }
+
         this.selectedColorIndex = index;
         const currentColor = this.colors[index];
         
@@ -177,7 +312,12 @@ class ColorPalette {
      * @param {HTMLInputElement} input - The hex input element
      */
     updateColorFromInput(input) {
-        const index = parseInt(input.dataset.index);
+        const index = parseInt(input.dataset.index, 10);
+        if (!this.allowHexEditing) {
+            input.value = this.colors[index];
+            return;
+        }
+
         let color = input.value.trim();
         
         // Validate and normalize the color
@@ -204,6 +344,9 @@ class ColorPalette {
     applySelectedColor(index) {
         const color = this.colors[index];
         this.hexGrid.applyColorToSelection(color);
+        if (this.useTwoColumnPalette) {
+            this.createPaletteUI({ skipGridSave: true });
+        }
         this.updateColorCountDisplay();
         // Save grid state asynchronously after color reduction is complete
         setTimeout(() => {
@@ -216,6 +359,10 @@ class ColorPalette {
      * @param {String} color - New color in hex format
      */
     updateColorFromPicker(color) {
+        if (!this.allowColorPicker) {
+            return;
+        }
+
         if (this.selectedColorIndex >= 0 && this.selectedColorIndex < this.colors.length) {
             this.colors[this.selectedColorIndex] = color;
             this.createPaletteUI(); // Refresh the palette UI
@@ -248,7 +395,10 @@ class ColorPalette {
      * Import a palette from a JSON file
      */
     importPalette() {
-        document.getElementById('paletteInput').click();
+        const paletteInput = document.getElementById('paletteInput');
+        if (paletteInput) {
+            paletteInput.click();
+        }
     }
     
     /**
@@ -330,9 +480,13 @@ class ColorPalette {
         // Apply the color mapping to the grid
         this.hexGrid.applyColorMapping(colorMap);
         
-        // Update the palette with the reduced colors
-        this.colors = reducedColors;
-        this.createPaletteUI();
+        if (this.useDetectedColorsAsPalette) {
+            // Update the palette with the reduced colors
+            this.colors = reducedColors;
+            this.createPaletteUI();
+        } else if (this.useTwoColumnPalette) {
+            this.createPaletteUI({ skipGridSave: true });
+        }
         
         // Update color count display
         this.updateColorCountDisplay();
@@ -358,9 +512,13 @@ class ColorPalette {
      */
     setOriginalImageColors(colorCounts) {
         this.originalImageColors = {...colorCounts};
-        
-        // Extract the top 10 most used colors
-        this.extractTopColors(colorCounts);
+
+        if (this.useDetectedColorsAsPalette) {
+            // Extract the top 10 most used colors
+            this.extractTopColors(colorCounts);
+        } else if (this.useTwoColumnPalette) {
+            this.createPaletteUI({ skipGridSave: true });
+        }
         
         // Update the color count display
         this.updateColorCountDisplay();
@@ -423,6 +581,33 @@ class ColorPalette {
      */
     getPaletteColors() {
         return [...this.colors];
+    }
+
+    /**
+     * Snap the active grid colors to the configured palette catalog.
+     */
+    constrainGridToFullPalette() {
+        if (!this.hexGrid || !Array.isArray(this.fullPalette) || this.fullPalette.length === 0) {
+            return;
+        }
+
+        let changed = false;
+
+        Object.keys(this.hexGrid.gemColors).forEach((key) => {
+            const currentColor = ColorUtils.normalizeHex(this.hexGrid.gemColors[key]);
+            if (this.fullPalette.includes(currentColor)) {
+                this.hexGrid.gemColors[key] = currentColor;
+                return;
+            }
+
+            this.hexGrid.gemColors[key] = ColorUtils.findClosestColor(currentColor, this.fullPalette);
+            changed = true;
+        });
+
+        if (changed) {
+            this.hexGrid.render();
+            this.hexGrid.saveState();
+        }
     }
     
     /**
