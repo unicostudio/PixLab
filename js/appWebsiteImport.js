@@ -5,6 +5,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const DEFAULT_COLS = 20;
     const DEFAULT_ROWS = 16;
+    const WEBSITE_IMPORT_DEFAULT_COLOR = '#FFFFFE';
     const DEFAULT_IMAGE_XPATH = "//div[@id='pattern-container']/a[@class='fancybox-image']/img/@src";
     const DEFAULT_DIMENSIONS_XPATH = "//div[@id='main']/div[@class='main-layout row']/div[@class='col-sm-9 col-sm-push-3 parent-column test-col']/table[@class='table table-striped table-bordered']/tbody/tr[6]/td[2]";
     const websiteUrlInput = document.getElementById('websiteUrlInput');
@@ -26,7 +27,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function createGemGrid(cols, rows) {
-        return new GemGrid('gemGrid', cols, rows);
+        const grid = new GemGrid('gemGrid', cols, rows);
+        grid.defaultColor = WEBSITE_IMPORT_DEFAULT_COLOR;
+        Object.keys(grid.gemColors).forEach(function(key) {
+            grid.gemColors[key] = WEBSITE_IMPORT_DEFAULT_COLOR;
+        });
+        grid.render();
+        return grid;
     }
 
     function showTransientMessage(message, durationMs) {
@@ -120,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return loadImageFromUrl(payload.imageUrl);
             })
             .then(function(image) {
-                loadImageToGridWithoutPalette(image, appState.gemGrid);
+                appState.emptyCells = loadImageToGridWithoutPalette(image, appState.gemGrid);
                 appState.colorPalette.originalImageColors = appState.gemGrid.getColorCounts();
                 appState.colorPalette.createPaletteUI({ skipGridSave: true });
                 appState.colorPalette.updateColorCountDisplay();
@@ -221,6 +228,9 @@ document.addEventListener('DOMContentLoaded', function() {
             );
         }
 
+        const sampledColors = {};
+        const nearWhiteKeys = new Set();
+
         for (let row = 0; row < gemGrid.rows; row += 1) {
             for (let col = 0; col < gemGrid.cols; col += 1) {
                 const insetX = cellWidth * (insetPercent / 100);
@@ -230,14 +240,70 @@ document.addEventListener('DOMContentLoaded', function() {
                 const sampleWidth = Math.max(1, cellWidth - insetX * 2);
                 const sampleHeight = Math.max(1, cellHeight - insetY * 2);
                 const color = averageRegionColor(sampleX, sampleY, sampleWidth, sampleHeight);
-                gemGrid.gemColors[`${col},${row}`] = color;
+                const key = `${col},${row}`;
+                sampledColors[key] = color;
+
+                const rgb = ColorUtils.hexToRgb(color);
+                if (rgb.r >= 245 && rgb.g >= 245 && rgb.b >= 245) {
+                    nearWhiteKeys.add(key);
+                }
             }
         }
+
+        const emptyKeys = new Set();
+        const queue = [];
+        const enqueueIfNearWhite = (col, row) => {
+            const key = `${col},${row}`;
+            if (nearWhiteKeys.has(key) && !emptyKeys.has(key)) {
+                emptyKeys.add(key);
+                queue.push({ col: col, row: row });
+            }
+        };
+
+        for (let col = 0; col < gemGrid.cols; col += 1) {
+            enqueueIfNearWhite(col, 0);
+            enqueueIfNearWhite(col, gemGrid.rows - 1);
+        }
+
+        for (let row = 0; row < gemGrid.rows; row += 1) {
+            enqueueIfNearWhite(0, row);
+            enqueueIfNearWhite(gemGrid.cols - 1, row);
+        }
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            [
+                { col: current.col - 1, row: current.row },
+                { col: current.col + 1, row: current.row },
+                { col: current.col, row: current.row - 1 },
+                { col: current.col, row: current.row + 1 }
+            ].forEach((neighbor) => {
+                if (!gemGrid.isValidCell(neighbor.col, neighbor.row)) {
+                    return;
+                }
+
+                const neighborKey = `${neighbor.col},${neighbor.row}`;
+                if (!nearWhiteKeys.has(neighborKey) || emptyKeys.has(neighborKey)) {
+                    return;
+                }
+
+                emptyKeys.add(neighborKey);
+                queue.push(neighbor);
+            });
+        }
+
+        Object.keys(sampledColors).forEach((key) => {
+            gemGrid.gemColors[key] = emptyKeys.has(key)
+                ? gemGrid.defaultColor
+                : sampledColors[key];
+        });
 
         gemGrid.render();
         window.setTimeout(function() {
             gemGrid.saveState();
         }, 0);
+
+        return Array.from(emptyKeys);
     }
 
     function getPositiveInteger(input, label) {
@@ -254,15 +320,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function buildPatternExport(appState) {
-        const colorCounts = appState.gemGrid.getColorCounts();
         const pixelData = [];
+        const emptyCellSet = new Set(appState.emptyCells || []);
         for (let row = 0; row < appState.gemGrid.rows; row += 1) {
             for (let col = 0; col < appState.gemGrid.cols; col += 1) {
-                const color = ColorUtils.normalizeHex(appState.gemGrid.gemColors[`${col},${row}`]);
-                if (color === ColorUtils.normalizeHex(appState.gemGrid.defaultColor)) {
+                const key = `${col},${row}`;
+                if (emptyCellSet.has(key)) {
                     continue;
                 }
-
+                const color = ColorUtils.normalizeHex(appState.gemGrid.gemColors[`${col},${row}`]);
                 pixelData.push({
                     x: col,
                     y: row,
@@ -287,9 +353,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function buildSourceColorCounts(appState) {
         const counts = {};
+        const emptyCellSet = new Set(appState.emptyCells || []);
 
         for (let row = 0; row < appState.gemGrid.rows; row += 1) {
             for (let col = 0; col < appState.gemGrid.cols; col += 1) {
+                const key = `${col},${row}`;
+                if (emptyCellSet.has(key)) {
+                    continue;
+                }
                 const color = ColorUtils.normalizeHex(appState.gemGrid.gemColors[`${col},${row}`]);
                 counts[color] = (counts[color] || 0) + 1;
             }
@@ -324,7 +395,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     })
                 };
             }),
-            sourceColorCounts: buildSourceColorCounts(appState)
+            sourceColorCounts: buildSourceColorCounts(appState),
+            emptyCells: (appState.emptyCells || []).map(function(key) {
+                const parts = key.split(',');
+                return {
+                    x: parseInt(parts[0], 10),
+                    y: parseInt(parts[1], 10)
+                };
+            })
         };
     }
 
@@ -334,6 +412,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         replaceGrid(appState, parseInt(patternData.grid.x, 10), parseInt(patternData.grid.y, 10));
+        const emptyCellSet = new Set(
+            Array.isArray(patternData.emptyCells)
+                ? patternData.emptyCells.map(function(cell) {
+                    return `${cell.x},${cell.y}`;
+                })
+                : []
+        );
 
         Object.keys(appState.gemGrid.gemColors).forEach(function(key) {
             appState.gemGrid.gemColors[key] = appState.gemGrid.defaultColor;
@@ -354,6 +439,7 @@ document.addEventListener('DOMContentLoaded', function() {
         appState.colorPalette.updateColorCountDisplay();
         appState.sourceClusters = Array.isArray(patternData.sourceClusters) ? patternData.sourceClusters : null;
         appState.sourceColorCounts = patternData.sourceColorCounts || null;
+        appState.emptyCells = Array.from(emptyCellSet);
     }
 
     function exportPng(appState, options) {
@@ -624,7 +710,8 @@ document.addEventListener('DOMContentLoaded', function() {
         gemGrid: createGemGrid(DEFAULT_COLS, DEFAULT_ROWS),
         colorPalette: null,
         sourceClusters: null,
-        sourceColorCounts: null
+        sourceColorCounts: null,
+        emptyCells: []
     };
 
     appStateRef.colorPalette = new ColorPalette('colorPaletteContainer', appStateRef.gemGrid, {
@@ -708,6 +795,7 @@ document.addEventListener('DOMContentLoaded', function() {
         Promise.resolve(appStateRef.colorPalette.paletteLoaded)
             .then(function() {
                 appStateRef.colorPalette.quantizeGridToFullPalette({
+                    emptyCells: appStateRef.emptyCells || [],
                     sourceColorCounts: appStateRef.sourceColorCounts || null,
                     sourceClusters: Array.isArray(appStateRef.sourceClusters) && appStateRef.sourceClusters.length > 0
                         ? appStateRef.sourceClusters

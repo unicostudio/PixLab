@@ -725,6 +725,9 @@ class ColorPalette {
 
         const saveHistory = options.saveHistory !== false;
         const defaultColor = ColorUtils.normalizeHex(this.hexGrid.defaultColor);
+        const emptyCellSet = new Set((options.emptyCells || []).map((cell) => {
+            return typeof cell === 'string' ? cell : `${cell.x},${cell.y}`;
+        }));
         const rawCounts = options.sourceColorCounts || this.hexGrid.getColorCounts();
         const colorCounts = {};
 
@@ -744,9 +747,8 @@ class ColorPalette {
         const colorMap = {};
 
         rankedSourceColors.forEach((sourceColor) => {
-            if (sourceColor === defaultColor && palettePool.includes(defaultColor)) {
+            if (sourceColor === defaultColor) {
                 colorMap[sourceColor] = defaultColor;
-                usedPaletteColors.add(defaultColor);
                 return;
             }
 
@@ -767,7 +769,15 @@ class ColorPalette {
 
         let changed = false;
         Object.keys(this.hexGrid.gemColors).forEach((key) => {
+            if (emptyCellSet.has(key)) {
+                this.hexGrid.gemColors[key] = defaultColor;
+                return;
+            }
             const currentColor = ColorUtils.normalizeHex(this.hexGrid.gemColors[key] || defaultColor);
+            if (currentColor === defaultColor) {
+                this.hexGrid.gemColors[key] = defaultColor;
+                return;
+            }
             const mappedColor = colorMap[currentColor] || currentColor;
             if (currentColor !== mappedColor) {
                 changed = true;
