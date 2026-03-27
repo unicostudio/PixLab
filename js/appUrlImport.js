@@ -57,6 +57,61 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.color = isError ? '#c88' : '#8c8';
     }
 
+    // ── Pattern image sampling ────────────────────────────────────────────────
+    // For pre-pixelated bead pattern images (kandipatterns style), sample the
+    // center of each cell rather than downscaling the whole image, so grid
+    // lines don't bleed into the color readings.
+
+    function sampleCellColor(ctx, imgWidth, imgHeight, col, row, cols, rows) {
+        var cellW = imgWidth / cols;
+        var cellH = imgHeight / rows;
+        var inset = 0.18;
+        var sx = Math.floor(col * cellW + cellW * inset);
+        var sy = Math.floor(row * cellH + cellH * inset);
+        var sw = Math.max(1, Math.floor(cellW * (1 - 2 * inset)));
+        var sh = Math.max(1, Math.floor(cellH * (1 - 2 * inset)));
+
+        var data = ctx.getImageData(sx, sy, sw, sh).data;
+        var r = 0, g = 0, b = 0, count = 0;
+        for (var i = 0; i < data.length; i += 4) {
+            if (data[i + 3] === 0) continue;
+            r += data[i]; g += data[i + 1]; b += data[i + 2];
+            count++;
+        }
+        if (count === 0) return '#FFFFFF';
+        return ColorUtils.rgbToHex(Math.round(r / count), Math.round(g / count), Math.round(b / count));
+    }
+
+    function findNearestPaletteColor(hexColor, palette) {
+        if (!palette || palette.length === 0) return hexColor;
+        var rgb = ColorUtils.hexToRgb(hexColor);
+        var best = palette[0];
+        var bestDist = Infinity;
+        for (var i = 0; i < palette.length; i++) {
+            var d = ColorUtils.colorDistance(rgb, ColorUtils.hexToRgb(palette[i]));
+            if (d < bestDist) { bestDist = d; best = palette[i]; }
+        }
+        return best;
+    }
+
+    function processPatternImage(img, gemGrid, colorPalette) {
+        var canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        var palette = colorPalette.fullPalette || [];
+        for (var row = 0; row < gemGrid.rows; row++) {
+            for (var col = 0; col < gemGrid.cols; col++) {
+                var raw = sampleCellColor(ctx, img.width, img.height, col, row, gemGrid.cols, gemGrid.rows);
+                gemGrid.gemColors[col + ',' + row] = findNearestPaletteColor(raw, palette);
+            }
+        }
+        gemGrid.render();
+        gemGrid.saveState();
+    }
+
     // ── bindExtraControls ─────────────────────────────────────────────────────
 
     function bindApplyGridSize(appState, helpers) {
@@ -188,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     Promise.resolve(appState.colorPalette.paletteLoaded)
                         .catch(function() { return appState.colorPalette.fullPalette; })
                         .then(function() {
-                            ImageProcessor.processImage(loadedImg, appState.gemGrid, appState.colorPalette);
+                            processPatternImage(loadedImg, appState.gemGrid, appState.colorPalette);
                             setTimeout(function() {
                                 appState.colorPalette.constrainGridToFullPalette();
                                 appState.colorPalette.originalImageColors = appState.gemGrid.getColorCounts();
