@@ -721,7 +721,8 @@ document.addEventListener('DOMContentLoaded', function() {
         useDetectedColorsAsPalette: false,
         useFullPaletteAsDisplay: true,
         allowLoadedPaletteOverride: false,
-        useTwoColumnPalette: true
+        useTwoColumnPalette: true,
+        paletteConstrainedReduction: true
     });
     window.colorPalette = appStateRef.colorPalette;
     document.getElementById('colorPaletteContainer').parentNode.colorPalette = appStateRef.colorPalette;
