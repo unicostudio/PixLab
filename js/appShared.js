@@ -199,37 +199,42 @@
             input.click();
         });
 
-        document.getElementById('loadImage').addEventListener('click', function() {
-            document.getElementById('imageInput').click();
-        });
+        const loadImageButton = document.getElementById('loadImage');
+        const imageInput = document.getElementById('imageInput');
 
-        document.getElementById('imageInput').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        if (loadImageButton && imageInput) {
+            loadImageButton.addEventListener('click', function() {
+                imageInput.click();
+            });
 
-            if (!file.type.match('image.*')) {
-                alert('Please select an image file.');
-                return;
-            }
+            imageInput.addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (!file) return;
 
-            resetDerivedImageState(appState.colorPalette);
+                if (!file.type.match('image.*')) {
+                    alert('Please select an image file.');
+                    return;
+                }
 
-            Promise.resolve(appState.colorPalette.paletteLoaded)
-                .catch(function() {
-                    return appState.colorPalette.fullPalette;
-                })
-                .then(function() {
-                    return ImageProcessor.loadImageToGrid(file, appState.gemGrid, appState.colorPalette);
-                })
-                .then(function() {
-                    showTransientMessage('Image loaded successfully.', 1000);
-                })
-                .catch(function(error) {
-                    alert('Error loading image: ' + error.message);
-                });
+                resetDerivedImageState(appState.colorPalette);
 
-            this.value = '';
-        });
+                Promise.resolve(appState.colorPalette.paletteLoaded)
+                    .catch(function() {
+                        return appState.colorPalette.fullPalette;
+                    })
+                    .then(function() {
+                        return ImageProcessor.loadImageToGrid(file, appState.gemGrid, appState.colorPalette);
+                    })
+                    .then(function() {
+                        showTransientMessage('Image loaded successfully.', 1000);
+                    })
+                    .catch(function(error) {
+                        alert('Error loading image: ' + error.message);
+                    });
+
+                this.value = '';
+            });
+        }
     }
 
     function bindKeyboardShortcuts(appState) {
@@ -253,6 +258,7 @@
     }
 
     window.PixLabApp = {
-        initializeSharedApp: initializeSharedApp
+        initializeSharedApp: initializeSharedApp,
+        showTransientMessage: showTransientMessage
     };
 })();

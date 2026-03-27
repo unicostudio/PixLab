@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PixLab - VoxelBlastJam</title>
+    <title>PixLab - Pattern Import</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -12,14 +12,23 @@
             <h1>PixLab</h1>
             <nav class="page-nav">
                 <a class="page-link" href="index.html">WiggleTangle</a>
-                <a class="page-link is-active" href="voxelblastjam.html">VoxelBlastJam</a>
-                <a class="page-link" href="pattern-import.html">Pattern Import</a>
+                <a class="page-link" href="voxelblastjam.html">VoxelBlastJam</a>
+                <a class="page-link is-active" href="pattern-import.html">Pattern Import</a>
                 <a class="page-link" href="image-extractor.html">Image Extractor</a>
             </nav>
         </header>
 
         <div class="main-content">
             <div class="left-panel">
+                <div class="pattern-info-panel">
+                    <h3>Pattern Info</h3>
+                    <div class="info-list">
+                        <div class="info-row"><strong>Name</strong><span id="patternName">No pattern loaded</span></div>
+                        <div class="info-row"><strong>Author</strong><span id="patternAuthor">-</span></div>
+                        <div class="info-row"><strong>Size</strong><span id="patternSize">20 x 16</span></div>
+                    </div>
+                </div>
+
                 <div class="color-count-controls">
                     <h3>Total Colors</h3>
                     <div class="control-group">
@@ -34,15 +43,6 @@
                     <div class="control-group">
                         <button id="clearSelection" class="action-button" type="button">Clear Selection</button>
                     </div>
-                    <div class="control-group grid-size-group">
-                        <label for="gridSizeSelect">Grid Size:</label>
-                        <select id="gridSizeSelect">
-                            <option value="40">40x40</option>
-                            <option value="60">60x60</option>
-                            <option value="80">80x80</option>
-                        </select>
-                        <button id="applyGridSize" type="button">Apply</button>
-                    </div>
                     <div class="history-controls">
                         <div class="history-buttons" style="visibility: hidden;">
                             <button id="undoButton" class="action-button" type="button">← Undo</button>
@@ -54,14 +54,13 @@
                 <div class="action-panel">
                     <h3>Actions</h3>
                     <div class="grid-controls">
+                        <button id="loadPattern" type="button">Load Pattern</button>
                         <button id="clearGrid" type="button">Clear Grid</button>
                         <button id="exportPNG" type="button">Export PNG</button>
                         <button style="display: none;" id="savePNG" type="button">Save PNG</button>
-                        <button id="savePixelGrid" type="button">Save Grid PNG</button>
                         <button id="saveGrid" type="button">Save Grid</button>
                         <button id="loadGrid" type="button">Load Grid</button>
-                        <button id="loadImage" type="button">Load Image</button>
-                        <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                        <input type="file" id="patternInput" accept=".json,application/json" style="display: none;">
                     </div>
                 </div>
             </div>
@@ -115,6 +114,6 @@
     <script src="js/colorPicker.js"></script>
     <script src="js/imageProcessing.js"></script>
     <script src="js/appShared.js"></script>
-    <script src="js/appVoxel.js"></script>
+    <script src="js/appPattern.js"></script>
 </body>
 </html>

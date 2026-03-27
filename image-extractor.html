@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixLab - Image Extractor</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>PixLab</h1>
+            <nav class="page-nav">
+                <a class="page-link" href="index.html">WiggleTangle</a>
+                <a class="page-link" href="voxelblastjam.html">VoxelBlastJam</a>
+                <a class="page-link" href="pattern-import.html">Pattern Import</a>
+                <a class="page-link is-active" href="image-extractor.html">Image Extractor</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="extractor-panel">
+                    <h3>Pattern Setup</h3>
+                    <div class="extractor-field">
+                        <label for="patternNameInput">Pattern Name</label>
+                        <input id="patternNameInput" type="text" value="Imported Pattern">
+                    </div>
+                    <div class="extractor-field">
+                        <label for="patternAuthorInput">Author</label>
+                        <input id="patternAuthorInput" type="text" value="PixLab">
+                    </div>
+                    <div class="extractor-grid">
+                        <div class="extractor-field">
+                            <label for="rowsInput">Rows</label>
+                            <input id="rowsInput" type="number" min="1" value="16">
+                        </div>
+                        <div class="extractor-field">
+                            <label for="colsInput">Columns</label>
+                            <input id="colsInput" type="number" min="1" value="20">
+                        </div>
+                    </div>
+                    <div class="extractor-grid">
+                        <div class="extractor-field">
+                            <label for="toleranceInput">Merge Tolerance</label>
+                            <input id="toleranceInput" type="number" min="0" max="255" value="16">
+                        </div>
+                        <div class="extractor-field">
+                            <label for="sampleInsetInput">Inset %</label>
+                            <input id="sampleInsetInput" type="number" min="0" max="45" value="22">
+                        </div>
+                    </div>
+                    <label class="extractor-toggle">
+                        <input id="omitBackgroundInput" type="checkbox" checked>
+                        <span>Omit dominant background color</span>
+                    </label>
+                </div>
+
+                <div class="action-panel">
+                    <h3>Actions</h3>
+                    <div class="extractor-actions">
+                        <button id="loadExtractorImage" type="button">Load Image</button>
+                        <button id="generateJson" type="button">Generate JSON</button>
+                        <button id="copyJson" type="button">Copy JSON</button>
+                        <button id="downloadJson" type="button">Download JSON</button>
+                    </div>
+                    <input id="extractorImageInput" type="file" accept="image/*" style="display: none;">
+                    <div class="extractor-note">
+                        Rows/columns are required so colors can be sampled from the center of each cell instead of the grid lines.
+                    </div>
+                </div>
+            </div>
+
+            <div class="middle-panel">
+                <div class="preview-stack">
+                    <div class="preview-card">
+                        <h3>Original Image</h3>
+                        <canvas id="sourcePreview" class="preview-canvas"></canvas>
+                    </div>
+                    <div class="preview-card">
+                        <h3>Sampled Grid Preview</h3>
+                        <canvas id="patternPreview" class="preview-canvas pixelated"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="extractor-panel">
+                    <h3>Generated JSON</h3>
+                    <textarea id="jsonOutput" spellcheck="false" placeholder="Load an image and generate JSON."></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/colorUtils.js"></script>
+    <script src="js/imageExtractor.js"></script>
+</body>
+</html>

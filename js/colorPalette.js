@@ -19,8 +19,10 @@ class ColorPalette {
         this.useFullPaletteAsDisplay = options.useFullPaletteAsDisplay === true;
         this.allowLoadedPaletteOverride = options.allowLoadedPaletteOverride !== false;
         this.useTwoColumnPalette = options.useTwoColumnPalette === true;
+        this.colors = Array.isArray(options.initialColors)
+            ? options.initialColors.map((color) => ColorUtils.normalizeHex(color))
+            : Array(10).fill('#FFFFFF');
         // Always maintain exactly 10 colors (all white by default)
-        this.colors = Array(10).fill('#FFFFFF');
         this.fullPalette = []; // Will store all 120 colors from JSON
         this.selectedColorIndex = 0;
         this.originalImageColors = {}; // Track original image colors
@@ -198,7 +200,8 @@ class ColorPalette {
      */
     loadFullColorPalette() {
         if (!this.palettePath) {
-            return Promise.reject(new Error('No palette path configured'));
+            this.fullPalette = [];
+            return Promise.resolve(this.fullPalette);
         }
 
         return fetch(this.palettePath)
@@ -249,7 +252,6 @@ class ColorPalette {
             paletteInput.addEventListener('change', (e) => this.handlePaletteFileSelect(e));
         }
         
-        // Apply color reduction button
         document.getElementById('applyColorReduction').addEventListener('click', () => this.applyColorReduction());
         
         // Set up click-to-copy for the selected color hex code
