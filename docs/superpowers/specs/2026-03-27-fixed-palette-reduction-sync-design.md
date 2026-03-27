@@ -81,7 +81,7 @@ This keeps the change shared between `VoxelBlastJam` and `Website Import` withou
 
 ### `js/colorPalette.js`
 
-This is the only runtime file that should carry the behavior fix.
+This is the primary runtime file for the behavior fix.
 
 Responsibilities for this change:
 
@@ -95,6 +95,12 @@ Implementation constraint:
 
 - do not change behavior for non-two-column editable palette pages
 
+### `js/gemGrid.js`
+
+This file is out of scope for general behavior changes.
+
+It may only be touched if the implementation needs a very small history-control adjustment so that one `Apply` action still behaves like one logical undo step after the new fixed-palette post-processing path is added.
+
 ### `CLAUDE.md` and `AGENTS.md`
 
 These guidance files should be updated to match the post-cleanup repository state.
@@ -106,6 +112,10 @@ Required updates:
 - document that `website-import.html` is now the only web import page
 - clarify that `dev-server.js` is the correct local server for Website Import because it provides `/proxy/html` and `/proxy/image`
 - keep broader repository guidance aligned with the current entry-page set and proxy/server workflow
+
+Scope note:
+
+- guidance cleanup in this task is intentionally limited to `CLAUDE.md` and `AGENTS.md`
 
 ## Runtime Behavior
 
@@ -155,6 +165,13 @@ The implementation is complete when all of the following are true:
 8. One `Apply` action does not create unintended duplicate undo history entries.
 9. `node --check js/colorPalette.js` passes.
 10. `git diff --check` passes.
+
+Manual verification setup for items 1-4:
+
+- start from a grid state where `Used / Remaining` is already active
+- for `voxelblastjam.html`, this can be a loaded grid file or imported image/grid with multiple colors present
+- for `website-import.html`, this should be a successfully captured/imported pattern with the fixed palette already applied
+- then lower `Target`, click `Apply`, and compare the visible grid against the `Used` column and `Current` count
 
 ## Risks
 
