@@ -83,6 +83,28 @@ npx http-server
 
 Then open http://localhost:8000 or http://localhost:8080 in your browser.
 
+## Deploy To Coolify
+
+Use the `Dockerfile` build pack for this repository.
+
+`website-import.html` depends on the Node proxy routes in `dev-server.js` (`/proxy/html` and `/proxy/image`), so a static deployment is not enough if you want the full app to work.
+
+Recommended Coolify settings:
+
+- Build Pack: `Dockerfile`
+- Base Directory: `/`
+- Port Exposes: `8000`
+- Health Check Path: `/healthz`
+- Health Check Port: `8000`
+
+After the container is live, the app entry points are:
+
+- `/index.html`
+- `/voxelblastjam.html`
+- `/pattern-import.html`
+- `/image-extractor.html`
+- `/website-import.html`
+
 ## License
 
 This project is open source and available for personal and educational use.

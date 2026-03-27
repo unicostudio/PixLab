@@ -182,6 +182,15 @@ function handleStaticFile(requestUrl, response) {
 const server = http.createServer((request, response) => {
     const requestUrl = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
 
+    if (requestUrl.pathname === '/healthz') {
+        response.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store'
+        });
+        response.end(JSON.stringify({ ok: true }));
+        return;
+    }
+
     if (requestUrl.pathname === '/proxy/html') {
         handleProxyHtml(requestUrl, response);
         return;
