@@ -19,6 +19,7 @@ class ColorPalette {
         this.useFullPaletteAsDisplay = options.useFullPaletteAsDisplay === true;
         this.allowLoadedPaletteOverride = options.allowLoadedPaletteOverride !== false;
         this.useTwoColumnPalette = options.useTwoColumnPalette === true;
+        this.paletteConstrainedReduction = options.paletteConstrainedReduction === true;
         this.colors = Array.isArray(options.initialColors)
             ? options.initialColors.map((color) => ColorUtils.normalizeHex(color))
             : Array(10).fill('#FFFFFF');
@@ -483,6 +484,11 @@ class ColorPalette {
             return;
         }
         
+        if (this.paletteConstrainedReduction) {
+            this._applyPaletteConstrainedReduction(targetCount);
+            return;
+        }
+
         // Reduce colors using k-means clustering
         const reducedColors = ColorUtils.reduceColors(gridColors, targetCount);
         const isFixedPaletteMode = this.usesFixedTwoColumnFullPalette();
@@ -523,6 +529,76 @@ class ColorPalette {
         }, 0);
     }
     
+    _applyPaletteConstrainedReduction(targetN) {
+        // Step 1 — Build normalized color counts and raw-key map
+        const rawCounts = this.hexGrid.getColorCounts();
+        const colorCounts = {};
+        const rawToNorm = {};
+
+        Object.keys(rawCounts).forEach(function(rawColor) {
+            const norm = ColorUtils.normalizeHex(rawColor);
+            rawToNorm[rawColor] = norm;
+            colorCounts[norm] = (colorCounts[norm] || 0) + rawCounts[rawColor];
+        });
+
+        // Step 2 — Initialize active set
+        let active = Object.keys(colorCounts);
+
+        // Step 2a — Normalized early-exit guard
+        if (active.length <= targetN) {
+            alert('Already at or below target color count.');
+            return;
+        }
+
+        // Step 3 — Greedy loop (operates purely in-memory; does not touch gemColors)
+        while (active.length > targetN) {
+            let minCost = Infinity;
+            let minIndex = 0;
+            let minAlternative = null;
+
+            for (let i = 0; i < active.length; i++) {
+                const c = active[i];
+                const others = active.filter(function(x) { return x !== c; });
+                const alternative = ColorUtils.findClosestColor(c, others);
+                const removalCost = colorCounts[c] * ColorUtils.colorDistance(
+                    ColorUtils.hexToRgb(c),
+                    ColorUtils.hexToRgb(alternative)
+                );
+                if (removalCost < minCost) {
+                    minCost = removalCost;
+                    minIndex = i;
+                    minAlternative = alternative;
+                }
+            }
+
+            const removed = active[minIndex];
+            active.splice(minIndex, 1);
+            colorCounts[minAlternative] += colorCounts[removed];
+            delete colorCounts[removed];
+        }
+
+        // Step 4 — Build colorMap keyed by raw gemColors values
+        // colorMap values are always members of active (normalized uppercase hex)
+        const activeSet = new Set(active);
+        const colorMap = {};
+        Object.keys(rawToNorm).forEach(function(rawColor) {
+            const norm = rawToNorm[rawColor];
+            if (!activeSet.has(norm)) {
+                colorMap[rawColor] = ColorUtils.findClosestColor(norm, active);
+            }
+        });
+
+        // Step 5 — Apply mapping (applyColorMapping calls render() internally)
+        this.hexGrid.applyColorMapping(colorMap, { saveHistory: false });
+
+        // Step 6 — Lean UI refresh (do NOT call syncFixedPaletteReductionResult)
+        this.originalImageColors = Object.assign({}, this.hexGrid.getColorCounts());
+        this.createPaletteUI({ skipGridSave: true });
+
+        // Step 7 — Single synchronous undo entry
+        this.hexGrid.saveState();
+    }
+
     /**
      * Update the color count display
      */
