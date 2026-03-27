@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const websiteStatus = document.getElementById('websiteStatus');
     const kandiCaptureBookmarklet = document.getElementById('kandiCaptureBookmarklet');
     const exportPatternJsonButton = document.getElementById('exportPatternJson');
+    const exportPng512Button = document.getElementById('exportPng512');
+    const exportPngNormalButton = document.getElementById('exportPngNormal');
     const generateTempJsonButton = document.getElementById('generateTempJson');
     const downloadTempJsonButton = document.getElementById('downloadTempJson');
     const loadTempPatternButton = document.getElementById('loadTempPattern');
@@ -354,6 +356,51 @@ document.addEventListener('DOMContentLoaded', function() {
         appState.sourceColorCounts = patternData.sourceColorCounts || null;
     }
 
+    function exportPng(appState, options) {
+        const cols = appState.gemGrid.cols;
+        const rows = appState.gemGrid.rows;
+        const border = 1;
+
+        let cellSize;
+        if (options.targetSize) {
+            cellSize = Math.max(1, Math.floor(options.targetSize / Math.max(cols, rows)) - border);
+        } else {
+            cellSize = options.cellSize || 8;
+        }
+
+        const canvasW = cols * (cellSize + border) + border;
+        const canvasH = rows * (cellSize + border) + border;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasW;
+        canvas.height = canvasH;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#CCCCCC';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const color = appState.gemGrid.gemColors[`${col},${row}`] || appState.gemGrid.defaultColor;
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                    border + col * (cellSize + border),
+                    border + row * (cellSize + border),
+                    cellSize,
+                    cellSize
+                );
+            }
+        }
+
+        const sourceUrl = websiteUrlInput.value.trim();
+        const slug = sourceUrl.split('/').filter(Boolean).pop() || 'captured-pattern';
+        const filename = slug + (options.suffix || ('_' + cols + 'x' + rows)) + '.png';
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = filename;
+        link.click();
+    }
+
     function downloadJson(data, filename) {
         const dataStr = JSON.stringify(data, null, 2);
         const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
@@ -601,6 +648,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const sizeSuffix = '_' + appStateRef.gemGrid.rows + 'x' + appStateRef.gemGrid.cols;
         downloadJson(exportData, slug + sizeSuffix + '.json');
         showTransientMessage('JSON exported.', 1000);
+    });
+
+    exportPng512Button.addEventListener('click', function() {
+        exportPng(appStateRef, { targetSize: 512, suffix: '_512x512' });
+        showTransientMessage('512×512 PNG exported.', 1000);
+    });
+
+    exportPngNormalButton.addEventListener('click', function() {
+        exportPng(appStateRef, { cellSize: 8 });
+        showTransientMessage('PNG exported.', 1000);
     });
 
     generateTempJsonButton.addEventListener('click', function() {

@@ -73,14 +73,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return value;
     }
 
-    function colorToCode(index) {
-        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        if (index < alphabet.length) {
-            return alphabet[index];
-        }
-        return 'C' + (index + 1);
-    }
-
     function averageRegionColor(ctx, startX, startY, width, height) {
         const safeWidth = Math.max(1, Math.floor(width));
         const safeHeight = Math.max(1, Math.floor(height));
@@ -241,35 +233,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function buildPatternJson(patternData) {
-        const paletteObject = {};
-        const colorCodeMap = {};
-
-        patternData.palette.forEach(function(color, index) {
-            const code = colorToCode(index);
-            colorCodeMap[color] = code;
-            paletteObject[code] = {
-                name: code,
-                hex: color
-            };
-        });
-
-        const beads = patternData.sampledCells.map(function(cell) {
-            return {
-                x: cell.x,
-                y: cell.y,
-                color: colorCodeMap[cell.color]
-            };
-        });
-
         return {
             name: patternNameInput.value.trim() || 'Imported Pattern',
             author: patternAuthorInput.value.trim() || 'PixLab',
-            dimensions: {
-                width: patternData.cols,
-                height: patternData.rows
+            grid: {
+                x: patternData.cols,
+                y: patternData.rows
             },
-            palette: paletteObject,
-            beads: beads
+            pixelData: patternData.sampledCells.map(function(cell) {
+                return {
+                    x: cell.x,
+                    y: cell.y,
+                    color: cell.color
+                };
+            })
         };
     }
 
