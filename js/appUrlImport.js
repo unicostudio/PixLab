@@ -100,7 +100,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function bindLoadFromUrl(appState, helpers) {
-        document.getElementById('loadFromUrl').addEventListener('click', function() {
+        var loadBtn = document.getElementById('loadFromUrl');
+
+        document.getElementById('urlInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { loadBtn.click(); }
+        });
+        document.getElementById('directImageUrl').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { loadBtn.click(); }
+        });
+
+        loadBtn.addEventListener('click', function() {
             if (isLoading) return;
 
             var urlValue = document.getElementById('urlInput').value.trim();
@@ -119,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var directUrl = directImageUrlInput.value.trim();
 
             isLoading = true;
-            var btn = document.getElementById('loadFromUrl');
+            var btn = loadBtn;
             var originalLabel = btn.textContent;
             btn.disabled = true;
             btn.textContent = 'Loading...';
@@ -130,12 +139,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.textContent = originalLabel;
             }
 
-            function loadImageFromUrl(resolvedImageUrl) {
-                var proxiedUrl = UrlFetcher.proxyImageUrl(resolvedImageUrl);
+            function loadImageFromUrl(resolvedImageUrl, tryDirect) {
                 var img = new Image();
                 img.crossOrigin = 'anonymous';
 
-                img.onload = function() {
+                function tryProxy() {
+                    var proxied = new Image();
+                    proxied.crossOrigin = 'anonymous';
+                    proxied.onload = function() { onImageReady(proxied); };
+                    proxied.onerror = function() {
+                        setStatus('Image could not be loaded. Try a direct image URL below.', true);
+                        document.getElementById('directImageUrlGroup').style.display = 'block';
+                        restoreButton();
+                    };
+                    proxied.src = UrlFetcher.proxyImageUrl(resolvedImageUrl);
+                }
+
+                function onImageReady(loadedImg) {
                     // Step 7 — Size validation
                     var size = validateSize(
                         document.getElementById('gridCols').value,
@@ -161,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     Promise.resolve(appState.colorPalette.paletteLoaded)
                         .catch(function() { return appState.colorPalette.fullPalette; })
                         .then(function() {
-                            ImageProcessor.processImage(img, appState.gemGrid, appState.colorPalette);
+                            ImageProcessor.processImage(loadedImg, appState.gemGrid, appState.colorPalette);
                             setTimeout(function() {
                                 appState.colorPalette.constrainGridToFullPalette();
                                 appState.colorPalette.originalImageColors = appState.gemGrid.getColorCounts();
@@ -173,18 +193,24 @@ document.addEventListener('DOMContentLoaded', function() {
                                 restoreButton();
                             }, 0);
                         });
-                };
+                }
 
-                img.onerror = function() {
-                    setStatus('Image could not be loaded. Try a direct image URL below.', true);
-                    document.getElementById('directImageUrlGroup').style.display = 'block';
-                    restoreButton();
-                };
-
-                img.src = proxiedUrl;
+                if (tryDirect) {
+                    img.onload = function() { onImageReady(img); };
+                    img.onerror = function() { tryProxy(); };
+                    img.src = resolvedImageUrl;
+                } else {
+                    img.onload = function() { onImageReady(img); };
+                    img.onerror = function() {
+                        setStatus('Image could not be loaded. Try a direct image URL below.', true);
+                        document.getElementById('directImageUrlGroup').style.display = 'block';
+                        restoreButton();
+                    };
+                    img.src = UrlFetcher.proxyImageUrl(resolvedImageUrl);
+                }
             }
 
-            // CORS-fallback: if directUrl is filled, skip HTML fetch
+            // CORS-fallback: if directUrl is filled, try direct load first
             if (directUrl) {
                 var size = validateSize(
                     document.getElementById('gridCols').value,
@@ -195,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     restoreButton();
                     return;
                 }
-                loadImageFromUrl(directUrl);
+                loadImageFromUrl(directUrl, true);
                 return;
             }
 
