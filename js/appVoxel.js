@@ -136,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
             appState.gemGrid.loadFromJSON(gridData);
             Promise.resolve(appState.colorPalette.paletteLoaded)
                 .finally(function() {
-                    appState.colorPalette.constrainGridToFullPalette();
+                    appState.colorPalette.quantizeGridToFullPalette();
                     appState.colorPalette.originalImageColors = appState.gemGrid.getColorCounts();
                     appState.colorPalette.createPaletteUI({ skipGridSave: true });
                     appState.colorPalette.updateColorCountDisplay();

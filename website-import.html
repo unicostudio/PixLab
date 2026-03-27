@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixLab - Website Import</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>PixLab</h1>
+            <nav class="page-nav">
+                <a class="page-link" href="index.html">WiggleTangle</a>
+                <a class="page-link" href="voxelblastjam.html">VoxelBlastJam</a>
+                <a class="page-link" href="pattern-import.html">Pattern Import</a>
+                <a class="page-link" href="image-extractor.html">Image Extractor</a>
+                <a class="page-link is-active" href="website-import.html">Website Import</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="action-panel">
+                    <h3>Export</h3>
+                    <div class="extractor-actions">
+                        <button id="exportPatternJson" type="button">Export JSON</button>
+                    </div>
+                </div>
+
+                <div class="color-count-controls">
+                    <h3>Total Colors</h3>
+                    <div class="control-group">
+                        <label for="currentColorCount">Current:</label>
+                        <span id="currentColorCount" class="color-count">0</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="targetColorCount">Target:</label>
+                        <input type="number" id="targetColorCount" min="1" max="120" value="10">
+                        <button id="applyColorReduction" type="button">Apply</button>
+                    </div>
+                    <div class="control-group">
+                        <button id="clearSelection" class="action-button" type="button">Clear Selection</button>
+                    </div>
+                    <div class="history-controls">
+                        <div class="history-buttons" style="visibility: hidden;">
+                            <button id="undoButton" class="action-button" type="button">← Undo</button>
+                            <button id="redoButton" class="action-button" type="button">Redo →</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="extractor-panel">
+                    <h3>Website Source</h3>
+                    <div class="extractor-field">
+                        <label for="websiteUrlInput">Website URL</label>
+                        <input id="websiteUrlInput" type="text" value="https://kandipatterns.com/patterns/misc/pretzel-62072" readonly>
+                    </div>
+                    <div class="extractor-grid">
+                        <div class="extractor-field">
+                            <label for="websiteColsInput">Columns</label>
+                            <input id="websiteColsInput" type="number" min="1" value="20" readonly>
+                        </div>
+                        <div class="extractor-field">
+                            <label for="websiteRowsInput">Rows</label>
+                            <input id="websiteRowsInput" type="number" min="1" value="16" readonly>
+                        </div>
+                    </div>
+                    <div class="extractor-actions" style="display: none;">
+                        <button id="generateTempJson" type="button">Generate Temp JSON</button>
+                        <button id="downloadTempJson" type="button">Download Temp JSON</button>
+                        <button id="loadTempPattern" type="button">Load Pattern</button>
+                        <button id="applyVoxelPalette" type="button">Apply Voxel Palette</button>
+                    </div>
+                    <div class="extractor-note">
+                        Captured images use the same center-sampling method as Image Extractor.
+                    </div>
+                    <div class="extractor-note">
+                        Temporary source data and Voxel palette application now run automatically after capture.
+                    </div>
+                    <div id="websiteStatus" class="website-status">Waiting for source data.</div>
+                </div>
+
+                <div class="extractor-panel">
+                    <h3>KandiPatterns Capture</h3>
+                    <div class="extractor-note">
+                        Drag this bookmarklet to your bookmarks bar. Then open a KandiPatterns pattern page and click it.
+                    </div>
+                    <a id="kandiCaptureBookmarklet" class="bookmarklet-link" href="#">Capture Kandi Page</a>
+                    <div class="extractor-note">
+                        The bookmarklet reads the real browser DOM, extracts the image URL and dimensions, then opens this page with the captured data.
+                    </div>
+                </div>
+            </div>
+
+            <div class="middle-panel">
+                <div class="grid-container">
+                    <canvas id="gemGrid" width="800" height="600"></canvas>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="color-palette">
+                    <h3>Color Palette</h3>
+                    <div class="selected-color-display">
+                        <div class="selected-color-preview" id="selectedColorPreview"></div>
+                        <div class="selected-color-hex" id="selectedColorHex" title="Click to copy">#FFFFFF</div>
+                    </div>
+                    <div id="colorPaletteContainer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/colorUtils.js"></script>
+    <script src="js/gemGrid.js"></script>
+    <script src="js/colorPalette.js"></script>
+    <script src="js/imageProcessing.js"></script>
+    <script src="js/appWebsiteImport.js"></script>
+</body>
+</html>

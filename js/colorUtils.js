@@ -70,6 +70,69 @@ const ColorUtils = {
         
         return closestColor;
     },
+
+    /**
+     * Find the closest color using an HSV-aware perceptual heuristic.
+     * This is useful when strong hues should not collapse into neutral grays.
+     * @param {String} targetHex - Target color in hex format
+     * @param {Array} palette - Array of hex color strings
+     * @returns {String} Closest matching color from the palette
+     */
+    findClosestColorPerceptual: function(targetHex, palette) {
+        const normalizedTarget = this.normalizeHex(targetHex);
+        const targetRgb = this.hexToRgb(normalizedTarget);
+        const targetHsv = this.rgbToHsv(targetRgb.r, targetRgb.g, targetRgb.b);
+        let closestColor = palette[0];
+        let minScore = Number.MAX_VALUE;
+
+        for (const rawPaletteColor of palette) {
+            const paletteColor = this.normalizeHex(rawPaletteColor);
+            const score = this.perceptualColorScore(normalizedTarget, paletteColor);
+
+            if (score < minScore) {
+                minScore = score;
+                closestColor = paletteColor;
+            }
+        }
+
+        return closestColor;
+    },
+
+    perceptualColorScore: function(targetHex, paletteHex) {
+        const normalizedTarget = this.normalizeHex(targetHex);
+        const normalizedPalette = this.normalizeHex(paletteHex);
+        const targetRgb = this.hexToRgb(normalizedTarget);
+        const paletteRgb = this.hexToRgb(normalizedPalette);
+        const targetHsv = this.rgbToHsv(targetRgb.r, targetRgb.g, targetRgb.b);
+        const paletteHsv = this.rgbToHsv(paletteRgb.r, paletteRgb.g, paletteRgb.b);
+
+        const rgbDistance = this.colorDistance(targetRgb, paletteRgb);
+        const hueDiffRaw = Math.abs(targetHsv.h - paletteHsv.h);
+        const hueDistance = Math.min(hueDiffRaw, 1 - hueDiffRaw);
+        const satDiff = Math.abs(targetHsv.s - paletteHsv.s);
+        const valueDiff = Math.abs(targetHsv.v - paletteHsv.v);
+
+        let score = rgbDistance * 0.35 + hueDistance * 160 + satDiff * 90 + valueDiff * 70;
+
+        if (targetHsv.v > 0.94 && targetHsv.s < 0.1) {
+            score += paletteHsv.v < 0.84 ? 220 : 0;
+            score += paletteHsv.s > 0.18 ? 80 : 0;
+        }
+
+        if (targetHsv.v < 0.22) {
+            score += paletteHsv.v > 0.35 ? 220 : 0;
+        }
+
+        if (targetHsv.s > 0.2 && paletteHsv.s < 0.08) {
+            score += 120;
+        }
+
+        if (targetHsv.s < 0.12 && paletteHsv.s > 0.35) {
+            score += 100;
+        }
+
+        return score;
+    },
     
     /**
      * Convert HSV to RGB
