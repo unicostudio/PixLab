@@ -267,26 +267,31 @@ If size parsing fails or image URL extraction fails:
 - If the current grid contains user content, show the existing replacement confirmation.
 - If the user cancels, abort without changing grid or export state.
 
-### 7. Apply the pattern to the grid
+### 7. Ensure palette readiness before grid mutation
+
+- Confirm that the VoxelBlastJam full palette catalog has loaded successfully before replacing or mutating the grid.
+- If [`full_color_palette_voxelblastjam.json`](/Users/ali/Documents/workplace/pixelart/PixLab/full_color_palette_voxelblastjam.json) is unavailable or empty, abort the import and show an inline error.
+- Do not allow URL Import to succeed with unsnapped raw sampled colors.
+
+### 8. Apply the pattern to the grid
 
 - Reset derived image state.
 - Replace the grid with the imported dimensions.
 - Apply the internal pattern through `PatternImport` with `usePatternPalette: false`.
 
-### 8. Snap imported colors to the VoxelBlastJam catalog
+### 9. Snap imported colors to the VoxelBlastJam catalog
 
-- Wait for the VoxelBlastJam full palette to be available from [`full_color_palette_voxelblastjam.json`](/Users/ali/Documents/workplace/pixelart/PixLab/full_color_palette_voxelblastjam.json).
 - Call `appState.colorPalette.constrainGridToFullPalette()` after the imported pattern has been applied.
 - This is required only on `url-import.html`.
 - The snapped grid becomes the authoritative working state for all later editing and export.
 
-### 9. Refresh URL Import palette state
+### 10. Refresh URL Import palette state
 
 - Recompute `originalImageColors` from the snapped grid, not from the pre-snap sampled pattern.
 - Rebuild the two-column palette UI so `Used` reflects only colors present in the snapped grid.
 - Keep `Remaining` as the rest of the VoxelBlastJam full catalog.
 
-### 10. Store export metadata
+### 11. Store export metadata
 
 On successful import, persist the latest successful source metadata in URL Import state:
 
@@ -296,7 +301,7 @@ On successful import, persist the latest successful source metadata in URL Impor
 
 This metadata is used later by `Download Pattern JSON`, even if the user edits colors after import.
 
-### 11. Enable export and show success
+### 12. Enable export and show success
 
 - Enable `Download Pattern JSON`.
 - Show the existing success toast.
@@ -368,6 +373,7 @@ The important constraint is that `appUrlImport.js` must execute after all three 
 - Source size missing: show inline status error, do not attempt partial import.
 - Source image missing: show inline status error, do not attempt partial import.
 - Image load failure: show inline status error, do not attempt partial import.
+- VoxelBlastJam palette load failure: show inline status error, do not replace the grid, and do not enable export.
 - Pattern generation failure: show inline status error, do not enable export.
 - Pattern apply failure: show inline status error, do not enable export.
 - User cancels replacement confirmation: silently abort and leave existing grid untouched.
