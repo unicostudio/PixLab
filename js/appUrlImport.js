@@ -144,15 +144,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 img.crossOrigin = 'anonymous';
 
                 function tryProxy() {
-                    var proxied = new Image();
-                    proxied.crossOrigin = 'anonymous';
-                    proxied.onload = function() { onImageReady(proxied); };
-                    proxied.onerror = function() {
-                        setStatus('Image could not be loaded. Try a direct image URL below.', true);
-                        document.getElementById('directImageUrlGroup').style.display = 'block';
-                        restoreButton();
-                    };
-                    proxied.src = UrlFetcher.proxyImageUrl(resolvedImageUrl);
+                    var urls = UrlFetcher.proxyImageUrls(resolvedImageUrl);
+                    var idx = 0;
+                    function next() {
+                        if (idx >= urls.length) {
+                            setStatus('Image could not be loaded. Try a direct image URL below.', true);
+                            document.getElementById('directImageUrlGroup').style.display = 'block';
+                            restoreButton();
+                            return;
+                        }
+                        var proxied = new Image();
+                        proxied.crossOrigin = 'anonymous';
+                        proxied.onload = function() { onImageReady(proxied); };
+                        proxied.onerror = function() { idx += 1; next(); };
+                        proxied.src = urls[idx];
+                    }
+                    next();
                 }
 
                 function onImageReady(loadedImg) {

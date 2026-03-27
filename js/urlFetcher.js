@@ -24,26 +24,53 @@ const UrlFetcher = (function() {
     }
 
     /**
-     * Fetch page HTML via allorigins CORS proxy.
-     * Rejects if the fetch fails or the response status is not ok.
+     * Fetch page HTML via CORS proxy, trying multiple proxies in sequence.
      * @param {string} url
      * @returns {Promise<string>} page HTML
      */
     function fetchPageHtml(url) {
-        const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
-        return fetch(proxyUrl)
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('Proxy request failed: ' + response.status);
+        var proxies = [
+            {
+                makeUrl: function(u) {
+                    return 'https://api.allorigins.win/get?url=' + encodeURIComponent(u);
+                },
+                parse: function(response) {
+                    return response.json().then(function(data) {
+                        if (!data || typeof data.contents !== 'string') {
+                            throw new Error('Unexpected allorigins response format.');
+                        }
+                        return data.contents;
+                    });
                 }
-                return response.json();
-            })
-            .then(function(data) {
-                if (!data || typeof data.contents !== 'string') {
-                    throw new Error('Unexpected proxy response format.');
+            },
+            {
+                makeUrl: function(u) {
+                    return 'https://corsproxy.io/?url=' + encodeURIComponent(u);
+                },
+                parse: function(response) {
+                    return response.text();
                 }
-                return data.contents;
-            });
+            }
+        ];
+
+        function tryProxy(index) {
+            if (index >= proxies.length) {
+                return Promise.reject(new Error('All proxies failed.'));
+            }
+            var proxy = proxies[index];
+            return fetch(proxy.makeUrl(url))
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('Proxy returned ' + response.status);
+                    }
+                    return proxy.parse(response);
+                })
+                .catch(function() {
+                    return tryProxy(index + 1);
+                });
+        }
+
+        return tryProxy(0);
     }
 
     /**
@@ -102,12 +129,24 @@ const UrlFetcher = (function() {
     }
 
     /**
+     * Return a list of proxied image URLs to try in sequence (avoids CORS taint).
+     * @param {string} imageUrl
+     * @returns {string[]}
+     */
+    function proxyImageUrls(imageUrl) {
+        return [
+            'https://api.allorigins.win/raw?url=' + encodeURIComponent(imageUrl),
+            'https://corsproxy.io/?url=' + encodeURIComponent(imageUrl)
+        ];
+    }
+
+    /**
      * Return a proxied image URL safe for canvas use (avoids CORS taint).
      * @param {string} imageUrl
      * @returns {string}
      */
     function proxyImageUrl(imageUrl) {
-        return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(imageUrl);
+        return proxyImageUrls(imageUrl)[0];
     }
 
     return {
@@ -115,6 +154,7 @@ const UrlFetcher = (function() {
         fetchPageHtml: fetchPageHtml,
         parsePatternSize: parsePatternSize,
         extractImageUrl: extractImageUrl,
-        proxyImageUrl: proxyImageUrl
+        proxyImageUrl: proxyImageUrl,
+        proxyImageUrls: proxyImageUrls
     };
 })();
