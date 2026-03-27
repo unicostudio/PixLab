@@ -26,7 +26,7 @@ In addition, repository guidance should be cleaned up so it no longer documents 
 - Make `Used / Remaining` update immediately and correctly after `Target` -> `Apply` on fixed-palette pages.
 - Ensure the displayed `Used` colors always match the actual final grid colors.
 - Keep the fix shared for both `VoxelBlastJam` and `Website Import`.
-- Update `CLAUDE.md` so it no longer references removed URL Import files or outdated proxy guidance.
+- Update `CLAUDE.md` and `AGENTS.md` so guidance matches the remaining Website Import-centric repository state.
 
 ## Non-Goals
 
@@ -95,9 +95,9 @@ Implementation constraint:
 
 - do not change behavior for non-two-column editable palette pages
 
-### `CLAUDE.md`
+### `CLAUDE.md` and `AGENTS.md`
 
-This guidance file should be updated to match the post-cleanup repository state.
+These guidance files should be updated to match the post-cleanup repository state.
 
 Required updates:
 
@@ -105,6 +105,7 @@ Required updates:
 - remove references to `js/appUrlImport.js`, `js/urlFetcher.js`, and `url-import.html`
 - document that `website-import.html` is now the only web import page
 - clarify that `dev-server.js` is the correct local server for Website Import because it provides `/proxy/html` and `/proxy/image`
+- keep broader repository guidance aligned with the current entry-page set and proxy/server workflow
 
 ## Runtime Behavior
 
@@ -128,6 +129,7 @@ On fixed-palette pages:
 5. `originalImageColors` / derived palette state is refreshed from the final grid
 6. `Used / Remaining` is rebuilt from the final snapped grid
 7. `Current` count reflects the final snapped grid
+8. the whole interaction still behaves like one user action from an undo/redo perspective
 
 ## Decision Boundary
 
@@ -149,16 +151,20 @@ The implementation is complete when all of the following are true:
 4. `Used` contains only colors that exist in the fixed VoxelBlastJam palette catalog.
 5. Non-fixed-palette pages still keep their previous reduction behavior.
 6. `CLAUDE.md` no longer references removed URL Import functionality.
-7. `node --check js/colorPalette.js` passes.
-8. `git diff --check` passes.
+7. `AGENTS.md` is aligned with the remaining repository structure and local server guidance where relevant.
+8. One `Apply` action does not create unintended duplicate undo history entries.
+9. `node --check js/colorPalette.js` passes.
+10. `git diff --check` passes.
 
 ## Risks
 
 - Re-quantizing after reduction may produce a final color count that reflects the fixed palette constraint rather than the raw intermediate k-means output. This is acceptable and more correct for fixed-palette pages.
 - `website-import.html` and `js/appWebsiteImport.js` currently have local modifications unrelated to this bugfix. Implementation must not revert or overwrite those unrelated changes.
+- `applyColorReduction()`, `applyColorMapping()`, and `quantizeGridToFullPalette()` all interact with grid history today. Implementation must preserve sane undo/redo behavior and avoid making one `Apply` click feel like multiple history steps.
 
 ## Implementation Notes
 
 - Prefer a small shared helper inside `ColorPalette` rather than duplicating post-reduction refresh logic inline.
 - Treat the final snapped grid as the source of truth for both `Used` and `Current`.
 - Keep the fix local to shared palette logic unless implementation proves that a page-specific hook is unavoidable.
+- If needed, part of the implementation may be reducing duplicate history writes inside the fixed-palette reduction path, but only to the extent required to keep one `Apply` interaction logically atomic.
