@@ -173,7 +173,11 @@ function createFakeGrid(initialGemColors) {
             });
             return counts;
         },
-        applyColorMapping(colorMap) {
+        applyColorMapping(colorMap, options = {}) {
+            if (options.saveHistory !== false) {
+                this.saveState();
+            }
+
             this.lastColorMapping = { ...colorMap };
             Object.keys(this.gemColors).forEach((key) => {
                 const current = this.normalizeColor(this.gemColors[key]);
@@ -310,6 +314,51 @@ test('fixed-palette reduction re-quantizes and refreshes derived state', () => {
         Object.keys(finalCounts).length,
         'currentColorCount should reflect the final snapped palette size'
     );
+});
+
+test('fixed-palette reduction records one logical Apply action', () => {
+    const fullPalette = ['#123456'];
+    const initialGemColors = {
+        '0,0': '#AA0000',
+        '1,0': '#BB0000',
+        '0,1': '#00AA00',
+        '1,1': '#00BB00'
+    };
+    const { palette, grid } = createHarness({
+        initialGemColors,
+        targetColorCount: 2,
+        paletteOptions: {
+            useTwoColumnPalette: true,
+            useFullPaletteAsDisplay: true,
+            useDetectedColorsAsPalette: false,
+            initialColors: fullPalette
+        }
+    });
+
+    palette.fullPalette = [...fullPalette];
+    palette.colors = [...fullPalette];
+    palette.originalImageColors = normalizeCounts(grid.getColorCounts());
+    palette.createPaletteUI({ skipGridSave: true });
+
+    grid.saveState();
+    const beforeApply = JSON.parse(JSON.stringify(grid.gemColors));
+    const historyLengthBeforeApply = grid.history.length;
+
+    palette.applyColorReduction();
+
+    const afterApply = JSON.parse(JSON.stringify(grid.gemColors));
+    assert.notDeepStrictEqual(afterApply, beforeApply);
+    assert.equal(
+        grid.history.length,
+        historyLengthBeforeApply + 1,
+        'fixed-palette reduction should add one final history state'
+    );
+
+    grid.undo();
+    assert.deepStrictEqual(grid.gemColors, beforeApply, 'one undo should restore the pre-Apply grid');
+
+    grid.redo();
+    assert.deepStrictEqual(grid.gemColors, afterApply, 'one redo should restore the snapped post-Apply grid');
 });
 
 test('non-fixed palette reduction stays on the regular detected-color path', () => {

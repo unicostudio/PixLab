@@ -194,6 +194,13 @@ class ColorPalette {
             )
         );
     }
+
+    usesFixedTwoColumnFullPalette() {
+        return this.useTwoColumnPalette === true &&
+            this.useFullPaletteAsDisplay === true &&
+            Array.isArray(this.fullPalette) &&
+            this.fullPalette.length > 0;
+    }
     
     /**
      * Load colors from the full color palette JSON file
@@ -442,6 +449,13 @@ class ColorPalette {
         // Reset the file input
         event.target.value = '';
     }
+
+    syncFixedPaletteReductionResult() {
+        this.quantizeGridToFullPalette({ saveHistory: false });
+        this.originalImageColors = { ...this.hexGrid.getColorCounts() };
+        this.createPaletteUI({ skipGridSave: true });
+        this.updateColorCountDisplay();
+    }
     
     /**
      * Apply color reduction to the grid
@@ -471,6 +485,7 @@ class ColorPalette {
         
         // Reduce colors using k-means clustering
         const reducedColors = ColorUtils.reduceColors(gridColors, targetCount);
+        const isFixedPaletteMode = this.usesFixedTwoColumnFullPalette();
         
         // Create a mapping from old colors to new colors
         const colorMap = {};
@@ -480,16 +495,26 @@ class ColorPalette {
         });
         
         // Apply the color mapping to the grid
-        this.hexGrid.applyColorMapping(colorMap);
+        this.hexGrid.applyColorMapping(colorMap, {
+            saveHistory: !isFixedPaletteMode
+        });
         
         if (this.useDetectedColorsAsPalette) {
             // Update the palette with the reduced colors
             this.colors = reducedColors;
             this.createPaletteUI();
+        } else if (isFixedPaletteMode) {
+            this.syncFixedPaletteReductionResult();
         } else if (this.useTwoColumnPalette) {
             this.createPaletteUI({ skipGridSave: true });
+            this.updateColorCountDisplay();
         }
-        
+
+        if (isFixedPaletteMode) {
+            this.hexGrid.saveState();
+            return;
+        }
+
         // Update color count display
         this.updateColorCountDisplay();
         // Save grid state asynchronously after color reduction is complete
@@ -622,6 +647,7 @@ class ColorPalette {
             return;
         }
 
+        const saveHistory = options.saveHistory !== false;
         const defaultColor = ColorUtils.normalizeHex(this.hexGrid.defaultColor);
         const rawCounts = options.sourceColorCounts || this.hexGrid.getColorCounts();
         const colorCounts = {};
@@ -675,7 +701,9 @@ class ColorPalette {
 
         if (changed) {
             this.hexGrid.render();
-            this.hexGrid.saveState();
+            if (saveHistory) {
+                this.hexGrid.saveState();
+            }
         }
     }
 

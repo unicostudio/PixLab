@@ -595,8 +595,10 @@ class GemGrid {
      * Apply a color mapping to the entire grid
      * @param {Object} colorMap - Map from old colors to new colors
      */
-    applyColorMapping(colorMap) {
-        this.saveState();
+    applyColorMapping(colorMap, options = {}) {
+        if (options.saveHistory !== false) {
+            this.saveState();
+        }
         
         for (const key in this.gemColors) {
             const oldColor = this.gemColors[key];
