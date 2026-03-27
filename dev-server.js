@@ -96,7 +96,12 @@ async function handleProxyHtml(requestUrl, response) {
         });
         response.end(html);
     } catch (error) {
-        sendError(response, 502, 'Failed to fetch upstream HTML.');
+        console.error('Proxy HTML fetch failed:', targetUrl.href, error && error.message ? error.message : error);
+        sendError(
+            response,
+            502,
+            'Failed to fetch upstream HTML.' + (error && error.message ? ' ' + error.message : '')
+        );
     }
 }
 
@@ -146,7 +151,12 @@ async function handleProxyImage(requestUrl, response) {
         });
         response.end(Buffer.from(arrayBuffer));
     } catch (error) {
-        sendError(response, 502, 'Failed to fetch upstream image.');
+        console.error('Proxy image fetch failed:', targetUrl.href, error && error.message ? error.message : error);
+        sendError(
+            response,
+            502,
+            'Failed to fetch upstream image.' + (error && error.message ? ' ' + error.message : '')
+        );
     }
 }
 
