@@ -31,6 +31,15 @@ const UrlFetcher = (function() {
     function fetchPageHtml(url) {
         var proxies = [
             {
+                // Local proxy via server.py — most reliable, no rate limits
+                makeUrl: function(u) {
+                    return 'http://localhost:8080/proxy?url=' + encodeURIComponent(u);
+                },
+                parse: function(response) {
+                    return response.text();
+                }
+            },
+            {
                 makeUrl: function(u) {
                     return 'https://api.allorigins.win/get?url=' + encodeURIComponent(u);
                 },
@@ -135,6 +144,7 @@ const UrlFetcher = (function() {
      */
     function proxyImageUrls(imageUrl) {
         return [
+            'http://localhost:8080/proxy?url=' + encodeURIComponent(imageUrl),
             'https://api.allorigins.win/raw?url=' + encodeURIComponent(imageUrl),
             'https://corsproxy.io/?url=' + encodeURIComponent(imageUrl)
         ];
