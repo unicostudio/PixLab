@@ -1,371 +1,387 @@
-# Pattern Import Page — Design Spec
+# URL Import JSON Pipeline — Design Spec
 
 **Date:** 2026-03-27
-**Status:** Approved
-
----
+**Status:** Approved for planning
 
 ## Overview
 
-A new PixLab page (`pattern-import.html`) that loads pixelated pattern images from a URL (e.g. kandipatterns.com), extracts size metadata from the source page, and provides all VoxelBlastJam editing capabilities. Replaces file-based image upload with URL-based import.
+`url-import.html` currently fetches a pattern image from a source page and paints the grid directly from that image. That direct image-to-grid path is producing incorrect results for pre-pixelated pattern images.
 
----
+The approved change is to make URL Import follow the same two-stage flow as Image Extractor plus Pattern Import:
 
-## New Files
+1. Fetch the source page and read the pattern size from the page HTML.
+2. Load the pattern image.
+3. Sample the image into a pattern JSON structure first.
+4. Apply that pattern data to the grid instead of painting the grid directly from the image.
+5. Let the user download the edited result as a new external JSON format.
 
-| File | Purpose |
-| --- | --- |
-| `pattern-import.html` | New page HTML |
-| `js/appPatternImport.js` | Page bootstrap (mirrors appVoxel.js pattern) |
-| `js/urlFetcher.js` | URL fetch, HTML parse, CORS proxy logic |
+The page keeps the current VoxelBlastJam editing experience after load. The JSON pipeline is an internal correctness fix plus a new export option, not a UI redesign.
 
-## Modified Files
+## Goals
 
-| File | Change |
-| --- | --- |
-| `index.html` | Nav link to `pattern-import.html` already added |
-| `voxelblastjam.html` | Nav link to `pattern-import.html` already added |
+- Replace the current direct image-to-grid import in `url-import.html` with a JSON-backed pipeline.
+- Reuse the Image Extractor cell-sampling logic so URL imports produce the same corrected bead placement logic.
+- Continue reading rows and columns from the source page HTML, not from image pixel dimensions.
+- Keep the VoxelBlastJam full-catalog palette behavior on the URL Import page after load.
+- Add a dedicated pattern JSON download action whose output reflects the user’s latest grid edits.
 
-## Unchanged Files
+## Non-Goals
 
-`js/appShared.js`, `js/gemGrid.js`, `js/imageProcessing.js`, `js/colorPalette.js`, `js/colorUtils.js`, `js/colorPicker.js` — no changes.
+- Change `pattern-import.html` to accept a new external file format.
+- Replace the existing `Save Grid` button or PixLab grid JSON format.
+- Support URL import when the source page cannot be fetched or when source size cannot be parsed.
+- Convert every internal PixLab import/export path to the new external JSON schema.
 
----
+## Existing Context
 
-## Page Layout
+- [`js/appUrlImport.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/appUrlImport.js) currently samples the fetched image and writes colors straight into `gemGrid`.
+- [`js/imageExtractor.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/imageExtractor.js) already contains the cell-center sampling logic that works better for bead pattern images.
+- [`js/appPattern.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/appPattern.js) already knows how to validate pattern JSON and apply it to the grid.
+- The URL Import page must keep the VoxelBlastJam palette behavior, not switch to a pattern-scoped palette like Pattern Import does today.
 
-Three-panel layout identical to VoxelBlastJam, with the following left panel differences.
+## Approved Approach
 
-### Left Panel
+URL Import becomes an orchestrator around shared pattern helpers:
 
-#### Total Colors (unchanged from VoxelBlast)
+- One shared sampler converts an image plus source size into internal pattern data.
+- One shared importer applies that pattern data to the grid.
+- One shared exporter converts the current grid into the new external JSON format.
 
-- Current color count display
-- Target color count + Apply button (`id="applyColorReduction"`) — auto-bound by `ColorPalette` internals, same as VoxelBlast
-- Clear Selection button (`id="clearSelection"`)
+This keeps the URL Import page on a single page, removes the inaccurate direct paint path, and avoids having URL Import, Image Extractor, and Pattern Import drift further apart.
 
-#### Size (new section, below Total Colors)
+## Module Boundaries
 
-- Cols input (`id="gridCols"`) + Rows input (`id="gridRows"`) — auto-filled from URL metadata, user-editable
-- Apply button (`id="applyGridSize"`) — bound in `bindExtraControls` callback (see below)
+### `js/patternSampler.js` (new)
 
-#### Actions
+Purpose: shared image-to-pattern conversion.
 
-- Clear Grid (`id="clearGrid"`)
-- Export PNG (`id="exportPNG"`)
-- Save Grid PNG (`id="savePixelGrid"`) — label: `Save {cols}x{rows} PNG`, updates dynamically. Filename: `{slug}_{cols}x{rows}.png`
-- Save Grid JSON (`id="saveGrid"`)
-- Load Grid JSON (`id="loadGrid"`)
-- URL input field (`id="urlInput"`, always visible, placeholder: `https://kandipatterns.com/...`)
-- Load from URL button (`id="loadFromUrl"`)
-- Error/status message area (`id="urlLoadStatus"`, initially empty — a `<div>` below the URL input)
-- Direct image URL input (`id="directImageUrl"`, initially hidden via `style="display:none"`, revealed on CORS failure, hidden again on successful load)
+Responsibilities:
 
-### Required Hidden Stub Elements
+- Accept an `HTMLImageElement` plus explicit `rows` and `cols`.
+- Sample each cell from the center region instead of downscaling the whole image.
+- Reuse the Image Extractor defaults that are already working for these assets:
+  - merge tolerance: `16`
+  - sample inset: `22%`
+  - omit dominant background color: `true`
+- Return internal pattern data in the current legacy pattern structure used by Pattern Import:
+  - `name`
+  - `author`
+  - `dimensions`
+  - `palette`
+  - `beads`
 
-`appShared.js:bindSharedControls` unconditionally queries several IDs. As of the current version of `appShared.js`:
+Notes:
 
-- `loadImage` and `imageInput` — **null-guarded**, not required as stubs
-- `savePNG` — **null-guarded**, not required as stub
+- `pixelData` is not the internal working format.
+- Omitting dominant background color preserves the current sparse bead semantics from the existing extractor flow.
 
-The following IDs **must be present** in `pattern-import.html`. `appShared.js` calls `document.getElementById(...).addEventListener(...)` on all of them unconditionally — missing any one causes a `TypeError` crash at init time:
+### `js/patternImport.js` (new)
 
-```html
-<button id="undoButton" style="visibility:hidden"></button>
-<button id="redoButton" style="visibility:hidden"></button>
-<button id="clearSelection" ...>Clear Selection</button>
-<button id="clearGrid" ...>Clear Grid</button>
-<button id="exportPNG" ...>Export PNG</button>
-<button id="saveGrid" ...>Save Grid</button>
-<button id="loadGrid" ...>Load Grid</button>
-```
+Purpose: shared pattern parsing and grid application.
 
-`undoButton` and `redoButton` must be present but should remain visually hidden (matching VoxelBlast pattern).
+Responsibilities:
 
-### Script Load Order in `pattern-import.html`
+- Validate and normalize the current legacy pattern structure.
+- Replace the active grid with the imported dimensions.
+- Apply bead colors to the new grid.
+- Support a palette mode option:
+  - `usePatternPalette: true` for [`js/appPattern.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/appPattern.js)
+  - `usePatternPalette: false` for [`js/appUrlImport.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/appUrlImport.js)
 
-```html
-<script src="js/colorUtils.js"></script>
-<script src="js/gemGrid.js"></script>
-<script src="js/colorPalette.js"></script>
-<script src="js/colorPicker.js"></script>
-<script src="js/imageProcessing.js"></script>
-<script src="js/urlFetcher.js"></script>
-<script src="js/appShared.js"></script>
-<script src="js/appPatternImport.js"></script>
-```
+Rationale:
 
-### Middle Panel
+- Pattern Import must keep its current pattern-scoped palette behavior.
+- URL Import must keep its current VoxelBlastJam full palette behavior even though it now imports through pattern data.
 
-Canvas grid — identical to VoxelBlast.
+### `js/patternExport.js` (new)
 
-### Right Panel
+Purpose: shared export of the new external JSON contract.
 
-Color Palette — identical to VoxelBlast (`full_color_palette_voxelblastjam.json`).
+Responsibilities:
 
----
+- Read the current grid state from `gemGrid`.
+- Build the new external JSON schema:
 
-## appPatternImport.js Structure
-
-`appPatternImport.js` defines its own local `replaceGrid(appState, cols, rows)` function — a new implementation that supports rectangular (non-square) grids. It must **not** reuse or import the `replaceGrid` from `appVoxel.js`, which only accepts a single `newSize` for square grids.
-
-`appPatternImport.js` calls `PixLabApp.initializeSharedApp(options)` with the following options:
-
-```js
+```json
 {
-  palettePath: 'full_color_palette_voxelblastjam.json',
-  enableColorPicker: false,
-  colorPaletteOptions: { ... },  // identical to appVoxel.js
-  createGrid: function() { ... },
-  bindExtraControls: function(appState, helpers) {
-    // ALL of the following bindings happen here, inside bindExtraControls,
-    // so that appState.gemGrid and appState.colorPalette are fully initialised:
-    bindApplyGridSize(appState, helpers);
-    bindSavePixelGrid(appState);
-    bindLoadFromUrl(appState, helpers);
+  "name": "Imported Pattern",
+  "author": "PixLab",
+  "grid": {
+    "x": 50,
+    "y": 50
   },
-  loadGridData: function(appState, gridData, helpers) { ... },
-  afterInit: function(appState) { ... }
+  "pixelData": [
+    {
+      "x": 1,
+      "y": 0,
+      "colorCode": "#123456"
+    }
+  ]
 }
 ```
 
-`currentSlug` is a module-level variable (initialised to `"pattern"`) in `appPatternImport.js`.
+- Export sparse pixel data only, matching the old `beads` meaning:
+  - include cells whose color is not the grid default color
+  - do not emit a palette block
+  - do not emit color names
+  - emit hex colors directly via `colorCode`
 
----
+## Internal vs External Data Contracts
 
-## URL Fetch Flow
+### Internal Working Format
 
-Triggered when user clicks `loadFromUrl`. The button is disabled and label set to `"Loading..."` for the entire async sequence. On completion or error, button is re-enabled and label restored. Re-entrant clicks during an active load are ignored (flag: `isLoading`).
+The implementation may keep using the current Pattern Import structure internally:
 
-Error and status messages are written to `urlLoadStatus`. The element is cleared at the start of each load attempt.
-
-### Step 1 — Validation
-
-If `urlInput` value is empty or does not start with `http`, set `urlLoadStatus` to an error message and abort. `urlInput` must be non-empty on every load attempt (including CORS-fallback retries) to preserve a valid slug.
-
-### Step 2 — Slug extraction
-
-Extract the last non-empty path segment from `urlInput` value (split on `/`, take last non-empty item, strip any file extension).
-Example: `https://kandipatterns.com/patterns/misc/pretzel-62072` → `pretzel-62072`.
-Store in `currentSlug`. This step runs on **every** load click, including CORS-fallback retries — `currentSlug` is always re-derived from the current `urlInput` value.
-
-### Step 3 — HTML fetch via CORS proxy
-
-```text
-GET https://api.allorigins.win/get?url={encodedUrl}
-```
-
-Response: JSON with `contents` field containing page HTML.
-
-**On failure:** Set `urlLoadStatus` to error message. Reveal `directImageUrl` input. On the next load click, if `directImageUrl` has a value, skip Steps 3–5 and use that value as the resolved image URL, jumping to Step 6. Size inputs must be filled manually; Size Validation (Step 7) will catch empty/invalid values.
-
-### Step 4 — Size parse
-
-Search page HTML for:
-
-```text
-(\d+) columns wide x (\d+) rows tall
-```
-
-Extract cols and rows as integers. Auto-fill `gridCols` and `gridRows` inputs.
-
-**On failure:** Set `urlLoadStatus` to warning "Size not found — enter manually". Leave size inputs unchanged for manual entry.
-
-### Step 5 — Image URL extraction
-
-Search fetched HTML for `<img>` tags whose `src` attribute contains `/patterns/` in the path. Use the first match. If no match, fall back to first `<img>` whose `src` ends with `.png`, `.jpg`, or `.gif`.
-
-Resolve relative URLs against the origin of the source page URL.
-
-**If no image URL found:** Set `urlLoadStatus` to error "Image not found on page". Abort.
-
-### Step 6 — Image proxy
-
-```text
-https://api.allorigins.win/raw?url={encodedImageUrl}
-```
-
-Create an `HTMLImageElement`, set `crossOrigin = "anonymous"`, set `src` to the proxied URL. Wait for `onload`.
-
-**On failure:** Set `urlLoadStatus` to error "Image could not be loaded". Abort.
-
-### Step 7 — Size Validation
-
-Read current values from `gridCols` and `gridRows` inputs. Validate:
-
-- Both must be present (not empty)
-- Both must parse as integers ≥ 1
-- Both must be ≤ 500
-
-**On failure:** Set `urlLoadStatus` to error "Invalid size — enter valid cols and rows". Abort.
-
-### Step 8 — Grid preparation
-
-Check `gridHasUserContent(appState.gemGrid)` using the same logic as `appVoxel.js`:
-
-```js
-function gridHasUserContent(gemGrid) {
-  return Object.values(gemGrid.gemColors).some(color => color !== gemGrid.defaultColor);
-}
-```
-
-If grid has user content: `confirm("Grid will be replaced. Continue?")`. If cancelled, abort.
-
-Call `helpers.resetDerivedImageState()` (via the `helpers` object from `bindExtraControls`).
-
-Call `replaceGrid(appState, cols, rows)`:
-
-1. `if (appState.gemGrid) appState.gemGrid.destroy()`
-2. `appState.gemGrid = new GemGrid('gemGrid', cols, rows)`
-3. `appState.colorPalette.setGrid(appState.gemGrid)` — re-bind palette to new grid instance
-4. `appState.gemGrid.saveState()`
-5. Update `gridCols`, `gridRows` input values
-6. Update `savePixelGrid` button label: `Save {cols}x{rows} PNG`
-
-### Step 9 — Image processing
-
-```js
-Promise.resolve(appState.colorPalette.paletteLoaded)
-  .catch(function() { return appState.colorPalette.fullPalette; })
-  .then(function() {
-    ImageProcessor.processImage(img, appState.gemGrid, appState.colorPalette);
-    // processImage schedules gemGrid.saveState() via setTimeout(0) internally.
-    // Our outer setTimeout(0) is queued AFTER that internal one.
-    // JS event loop processes setTimeout(0) callbacks in FIFO order,
-    // so saveState() is guaranteed to run before our post-processing:
-    setTimeout(function() {
-      appState.colorPalette.constrainGridToFullPalette();
-      appState.colorPalette.originalImageColors = appState.gemGrid.getColorCounts();
-      appState.colorPalette.createPaletteUI({ skipGridSave: true });
-      appState.colorPalette.updateColorCountDisplay();
-      PixLabApp.showTransientMessage('Pattern loaded.', 1200);
-      document.getElementById('directImageUrl').style.display = 'none';
-    }, 0);
-  });
-```
-
-Uses `.catch()` — intentionally matches the image-load path in `appShared.js` (not the `.finally()` in `appVoxel.js`'s `loadGridData`). Hides `directImageUrl` on successful load.
-
----
-
-## Size Apply Button (Manual Resize)
-
-Bound inside `bindExtraControls`. When user clicks `applyGridSize`:
-
-1. Read cols and rows from `gridCols`/`gridRows` inputs
-2. Run Size Validation. On failure show `alert()` and abort.
-3. If new cols === current `appState.gemGrid.cols` and rows === current `appState.gemGrid.rows`, return (no-op)
-4. If `gridHasUserContent(appState.gemGrid)`: `confirm("Changing grid size will clear the current grid. Continue?")`. If cancelled, abort.
-5. Call `helpers.resetDerivedImageState()`
-6. Call `replaceGrid(appState, cols, rows)`
-
----
-
-## Load Grid JSON — Free-form Dimensions
-
-`loadGridData` in `appPatternImport.js`:
-
-1. Parse `gridData.cols` and `gridData.rows` as integers
-2. Run Size Validation. On failure throw an `Error` with a descriptive message.
-3. Show `confirm("Loading this grid will replace the current grid. Continue?")` if grid has user content. If cancelled, return without changes.
-4. Reset `currentSlug` to `"pattern"` (JSON load has no URL slug)
-5. Call `helpers.resetDerivedImageState()`
-6. Call `replaceGrid(appState, cols, rows)`
-7. Call `appState.gemGrid.loadFromJSON(gridData)`
-8. Use `.finally()` pattern (matching `appVoxel.js`) for post-palette-load processing:
-
-```js
-Promise.resolve(appState.colorPalette.paletteLoaded)
-  .finally(function() {
-    appState.colorPalette.constrainGridToFullPalette();
-    appState.colorPalette.originalImageColors = appState.gemGrid.getColorCounts();
-    appState.colorPalette.createPaletteUI({ skipGridSave: true });
-    appState.colorPalette.updateColorCountDisplay();
-  });
-```
-
-Accepts any positive-integer dimensions — not constrained to 40/60/80.
-
----
-
-## Download Filename
-
-- `savePixelGrid` button: downloads `{currentSlug}_{cols}x{rows}.png`
-- `currentSlug` defaults to `"pattern"` until a URL is successfully loaded
-
----
-
-## Color Palette
-
-Uses `full_color_palette_voxelblastjam.json` — same as VoxelBlastJam.
-
-```js
+```json
 {
-  allowColorPicker: false,
-  allowHexEditing: false,
-  useDetectedColorsAsPalette: false,
-  useFullPaletteAsDisplay: true,
-  allowLoadedPaletteOverride: false,
-  useTwoColumnPalette: true
+  "name": "Imported Pattern",
+  "author": "PixLab",
+  "dimensions": {
+    "width": 50,
+    "height": 50
+  },
+  "palette": {
+    "A": {
+      "name": "A",
+      "hex": "#123456"
+    }
+  },
+  "beads": [
+    {
+      "x": 1,
+      "y": 0,
+      "color": "A"
+    }
+  ]
 }
 ```
 
----
+This format stays internal so the existing Pattern Import code path can be reused instead of rewriting every importer now.
 
-## All Inherited VoxelBlast Features
+### External Download Format
 
-- Color reduction (target color count + Apply) — auto-bound by ColorPalette
-- Clear selection
-- Undo / Redo (Ctrl+Z / Ctrl+Y)
-- Clear Grid
-- Export PNG (full grid with gem borders)
-- Save Grid PNG (pixel-only export, dynamic filename)
-- Save / Load Grid JSON (free-form dimensions)
-- Color palette display with two-column layout
-- Color mapping: grid colors snapped to full VoxelBlast palette
-- Keyboard shortcuts (Ctrl+Z, Ctrl+Y, Escape)
+The file the user downloads from URL Import must use the new contract:
 
----
-
-## urlFetcher.js Interface
-
-```js
-const UrlFetcher = {
-  // Extract slug from URL: last non-empty path segment, extension stripped.
-  // e.g. "https://kandipatterns.com/patterns/misc/pretzel-62072" → "pretzel-62072"
-  // e.g. "https://example.com/foo/bar.png" → "bar"
-  extractSlug(url): string,
-
-  // Fetch page HTML via allorigins proxy. Rejects on network/CORS failure.
-  fetchPageHtml(url): Promise<string>,
-
-  // Parse cols and rows from HTML string. Returns null if not found.
-  parsePatternSize(html): { cols: number, rows: number } | null,
-
-  // Find main pattern image URL from HTML string.
-  // Priority: first <img src> containing "/patterns/".
-  // Fallback: first <img src> ending in .png/.jpg/.gif.
-  // Resolves relative URLs against baseUrl.
-  // Returns absolute URL string or null.
-  extractImageUrl(html, baseUrl): string | null,
-
-  // Return proxied image URL safe for canvas use.
-  proxyImageUrl(imageUrl): string
-};
+```json
+{
+  "name": "Imported Pattern",
+  "author": "PixLab",
+  "grid": {
+    "x": 50,
+    "y": 50
+  },
+  "pixelData": [
+    {
+      "x": 1,
+      "y": 0,
+      "colorCode": "#123456"
+    }
+  ]
+}
 ```
 
----
+Field mapping from the old structure:
 
-## Error Handling Summary
+- `dimensions.width` -> `grid.x`
+- `dimensions.height` -> `grid.y`
+- `beads` -> `pixelData`
+- bead `color` code lookup -> direct `colorCode` hex string
+- `palette` removed entirely
 
-| Scenario | Behavior |
-| --- | --- |
-| Empty / invalid URL | Error in `urlLoadStatus`, abort |
-| CORS proxy unreachable | Error in `urlLoadStatus`, reveal `directImageUrl` |
-| Size not found in HTML | Warning in `urlLoadStatus`, leave size inputs for manual entry |
-| Image URL not found in HTML | Error in `urlLoadStatus`, abort |
-| Image load fails | Error in `urlLoadStatus`, abort |
-| Invalid cols/rows (zero, NaN, >500) | Error in `urlLoadStatus` (or `alert()` for manual resize), abort |
-| Grid has user content before load/resize | `confirm()` dialog |
-| Re-entrant load click | Ignored — button disabled during active load |
-| Successful load | Hide `directImageUrl`, show success toast |
+## URL Import Page Changes
+
+### UI Changes
+
+[`url-import.html`](/Users/ali/Documents/workplace/pixelart/PixLab/url-import.html) keeps its current structure with one action change:
+
+- Add `Download Pattern JSON` button to the Actions panel.
+- Keep `Save Grid` unchanged for existing PixLab grid JSON export.
+- Keep size inputs visible so users can still manually resize the grid after import.
+
+Button state:
+
+- `Download Pattern JSON` is disabled until the first successful URL import.
+- After a successful import it stays enabled for the rest of the session and always exports the current grid state.
+
+### Removed URL Fallback Behavior
+
+The current direct image URL fallback is no longer part of the approved flow.
+
+Reason:
+
+- The corrected import path depends on source-page HTML for reliable rows and columns.
+- If the source page cannot be fetched or if size metadata cannot be parsed, URL Import should stop and show a clear error instead of trying to continue with a partially defined import.
+
+That means `directImageUrlGroup` and its related retry path can be removed or left unwired, but it should not remain part of the active import flow.
+
+## URL Import Runtime Flow
+
+Triggered by `Load from URL` on [`url-import.html`](/Users/ali/Documents/workplace/pixelart/PixLab/url-import.html).
+
+### 1. Validate the source URL
+
+- Require a non-empty URL starting with `http`.
+- Derive `currentSlug` from the URL path for filenames and default pattern name.
+
+### 2. Fetch source HTML
+
+- Use [`js/urlFetcher.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/urlFetcher.js) proxy logic.
+- If HTML fetch fails, stop the flow and show an error in `urlLoadStatus`.
+
+### 3. Extract source metadata
+
+From the fetched HTML:
+
+- parse pattern size using the existing source-page text pattern
+- extract the pattern image URL
+- derive metadata for later export:
+  - `name`: `currentSlug` if present, otherwise `Imported Pattern`
+  - `author`: source hostname if available, otherwise `PixLab`
+
+If size parsing fails or image URL extraction fails:
+
+- stop the flow
+- do not modify the grid
+- keep the download button disabled
+
+### 4. Load the image
+
+- Resolve and proxy the image URL through the current `UrlFetcher` image proxy chain.
+- Abort with a clear status message if the image cannot be loaded.
+
+### 5. Generate internal pattern data
+
+- Pass the loaded image plus parsed `rows` and `cols` into `PatternSampler`.
+- `PatternSampler` produces internal legacy pattern JSON using the extracted metadata.
+- This is the step that replaces the current `processPatternImage` direct-write behavior in [`js/appUrlImport.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/appUrlImport.js).
+
+### 6. Confirm replacement if needed
+
+- If the current grid contains user content, show the existing replacement confirmation.
+- If the user cancels, abort without changing grid or export state.
+
+### 7. Apply the pattern to the grid
+
+- Reset derived image state.
+- Replace the grid with the imported dimensions.
+- Apply the internal pattern through `PatternImport` with `usePatternPalette: false`.
+- Recompute `originalImageColors` from the resulting grid so the two-column VoxelBlastJam palette UI remains accurate.
+
+### 8. Store export metadata
+
+On successful import, persist the latest successful source metadata in URL Import state:
+
+- `currentSlug`
+- `currentPatternName`
+- `currentPatternAuthor`
+
+This metadata is used later by `Download Pattern JSON`, even if the user edits colors after import.
+
+### 9. Enable export and show success
+
+- Enable `Download Pattern JSON`.
+- Show the existing success toast.
+- Clear any prior error status.
+
+## Download Pattern JSON Behavior
+
+The new button exports from the current grid state at click time. It must not blindly re-download the original imported pattern object.
+
+Export rules:
+
+- dimensions come from `appState.gemGrid.cols` and `appState.gemGrid.rows`
+- metadata comes from the latest successful import state
+- `pixelData` is rebuilt from the current grid contents
+- only non-default-color cells are emitted
+- colors are emitted directly as normalized hex codes
+
+Example filename:
+
+- `{currentSlug}_pattern.json`
+
+This ensures user edits are reflected in the downloaded file.
+
+## Changes to Existing Pages
+
+### `image-extractor.html` / `js/imageExtractor.js`
+
+Behavior stays the same for the user, but the page should stop owning its own sampling implementation and call `PatternSampler` instead.
+
+This keeps URL Import and Image Extractor aligned on the actual cell sampling logic.
+
+### `pattern-import.html` / `js/appPattern.js`
+
+Behavior stays the same for the user.
+
+The page should delegate validation and application logic to `PatternImport` so URL Import and Pattern Import no longer maintain separate copies of the same import path.
+
+`pattern-import.html` does not need to read the new external `grid/pixelData` format in this task.
+
+## Script Load Order
+
+### `image-extractor.html`
+
+Load the shared sampler before [`js/imageExtractor.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/imageExtractor.js).
+
+### `pattern-import.html`
+
+Load the shared importer before [`js/appPattern.js`](/Users/ali/Documents/workplace/pixelart/PixLab/js/appPattern.js).
+
+### `url-import.html`
+
+Load:
+
+1. existing shared dependencies
+2. `js/urlFetcher.js`
+3. `js/patternSampler.js`
+4. `js/patternImport.js`
+5. `js/patternExport.js`
+6. `js/appShared.js`
+7. `js/appUrlImport.js`
+
+The important constraint is that `appUrlImport.js` must execute after all three pattern helpers are available.
+
+## Error Handling
+
+- Invalid source URL: show inline status error, do nothing else.
+- Source HTML fetch failure: show inline status error, do not attempt partial import.
+- Source size missing: show inline status error, do not attempt partial import.
+- Source image missing: show inline status error, do not attempt partial import.
+- Image load failure: show inline status error, do not attempt partial import.
+- Pattern generation failure: show inline status error, do not enable export.
+- Pattern apply failure: show inline status error, do not enable export.
+- User cancels replacement confirmation: silently abort and leave existing grid untouched.
+
+`Load from URL` still disables itself during the async flow and restores itself on every exit path.
+
+## Manual Verification
+
+Because shared logic is being extracted, manual testing must cover all affected entry points.
+
+### URL Import
+
+- Valid URL imports with the correct rows and columns taken from the source page.
+- Imported pattern colors and placement match the corrected cell-sampled behavior.
+- VoxelBlastJam full-palette UI still appears after import.
+- `Download Pattern JSON` stays disabled until a successful import.
+- After a successful import, downloaded JSON uses the new `grid/pixelData` schema.
+- After editing colors on the grid, downloaded JSON reflects the edited state.
+- If the grid is already populated, replacement confirmation still works.
+- Invalid URL, fetch failure, missing size, missing image, and image-load failure all recover cleanly.
+
+### Pattern Import
+
+- Existing pattern JSON files still load correctly after importer logic is shared.
+
+### Image Extractor
+
+- Loading an image and generating JSON still behaves the same after sampler logic is shared.
+
+## Planning Notes
+
+The implementation plan should treat this as a refactor plus behavior change, not a page rewrite:
+
+1. extract shared sampler/import/export helpers
+2. wire URL Import to the new pipeline
+3. update Image Extractor and Pattern Import to consume the shared helpers
+4. run manual verification across all three pages
