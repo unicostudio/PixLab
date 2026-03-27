@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PixLab - Pattern Import</title>
+    <title>PixLab - Website Import</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -13,21 +13,19 @@
             <nav class="page-nav">
                 <a class="page-link" href="index.html">WiggleTangle</a>
                 <a class="page-link" href="voxelblastjam.html">VoxelBlastJam</a>
-                <a class="page-link is-active" href="pattern-import.html">Pattern Import</a>
+                <a class="page-link" href="pattern-import.html">Pattern Import</a>
                 <a class="page-link" href="image-extractor.html">Image Extractor</a>
                 <a class="page-link" href="url-import.html">URL Import</a>
-                <a class="page-link" href="website-import.html">Website Import</a>
+                <a class="page-link is-active" href="website-import.html">Website Import</a>
             </nav>
         </header>
 
         <div class="main-content">
             <div class="left-panel">
-                <div class="pattern-info-panel">
-                    <h3>Pattern Info</h3>
-                    <div class="info-list">
-                        <div class="info-row"><strong>Name</strong><span id="patternName">No pattern loaded</span></div>
-                        <div class="info-row"><strong>Author</strong><span id="patternAuthor">-</span></div>
-                        <div class="info-row"><strong>Size</strong><span id="patternSize">20 x 16</span></div>
+                <div class="action-panel">
+                    <h3>Export</h3>
+                    <div class="extractor-actions">
+                        <button id="exportPatternJson" type="button">Export JSON</button>
                     </div>
                 </div>
 
@@ -53,16 +51,45 @@
                     </div>
                 </div>
 
-                <div class="action-panel">
-                    <h3>Actions</h3>
-                    <div class="grid-controls">
-                        <button id="loadPattern" type="button">Load Pattern</button>
-                        <button id="clearGrid" type="button">Clear Grid</button>
-                        <button id="exportPNG" type="button">Export PNG</button>
-                        <button style="display: none;" id="savePNG" type="button">Save PNG</button>
-                        <button id="saveGrid" type="button">Save Grid</button>
-                        <button id="loadGrid" type="button">Load Grid</button>
-                        <input type="file" id="patternInput" accept=".json,application/json" style="display: none;">
+                <div class="extractor-panel">
+                    <h3>Website Source</h3>
+                    <div class="extractor-field">
+                        <label for="websiteUrlInput">Website URL</label>
+                        <input id="websiteUrlInput" type="text" value="https://kandipatterns.com/patterns/misc/pretzel-62072" readonly>
+                    </div>
+                    <div class="extractor-grid">
+                        <div class="extractor-field">
+                            <label for="websiteColsInput">Columns</label>
+                            <input id="websiteColsInput" type="number" min="1" value="20" readonly>
+                        </div>
+                        <div class="extractor-field">
+                            <label for="websiteRowsInput">Rows</label>
+                            <input id="websiteRowsInput" type="number" min="1" value="16" readonly>
+                        </div>
+                    </div>
+                    <div class="extractor-actions" style="display: none;">
+                        <button id="generateTempJson" type="button">Generate Temp JSON</button>
+                        <button id="downloadTempJson" type="button">Download Temp JSON</button>
+                        <button id="loadTempPattern" type="button">Load Pattern</button>
+                        <button id="applyVoxelPalette" type="button">Apply Voxel Palette</button>
+                    </div>
+                    <div class="extractor-note">
+                        Captured images use the same center-sampling method as Image Extractor.
+                    </div>
+                    <div class="extractor-note">
+                        Temporary source data and Voxel palette application now run automatically after capture.
+                    </div>
+                    <div id="websiteStatus" class="website-status">Waiting for source data.</div>
+                </div>
+
+                <div class="extractor-panel">
+                    <h3>KandiPatterns Capture</h3>
+                    <div class="extractor-note">
+                        Drag this bookmarklet to your bookmarks bar. Then open a KandiPatterns pattern page and click it.
+                    </div>
+                    <a id="kandiCaptureBookmarklet" class="bookmarklet-link" href="#">Capture Kandi Page</a>
+                    <div class="extractor-note">
+                        The bookmarklet reads the real browser DOM, extracts the image URL and dimensions, then opens this page with the captured data.
                     </div>
                 </div>
             </div>
@@ -84,38 +111,12 @@
                 </div>
             </div>
         </div>
-
-        <div id="colorPickerModal" class="modal">
-            <div class="modal-content">
-                <span class="close-button">&times;</span>
-                <h3>Color Picker</h3>
-                <div class="color-wheel-container">
-                    <canvas id="colorWheel" width="300" height="300"></canvas>
-                </div>
-                <div class="color-preview">
-                    <div class="preview-group">
-                        <label>Selected Color:</label>
-                        <div id="colorPreview"></div>
-                    </div>
-                    <div class="preview-group">
-                        <label>Hex Code:</label>
-                        <input type="text" id="hexInput" maxlength="7">
-                    </div>
-                </div>
-                <div class="modal-buttons">
-                    <button id="saveColor" type="button">Save Color</button>
-                    <button id="cancelColor" type="button">Cancel</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <script src="js/colorUtils.js"></script>
     <script src="js/gemGrid.js"></script>
     <script src="js/colorPalette.js"></script>
-    <script src="js/colorPicker.js"></script>
     <script src="js/imageProcessing.js"></script>
-    <script src="js/appShared.js"></script>
-    <script src="js/appPattern.js"></script>
+    <script src="js/appWebsiteImport.js"></script>
 </body>
 </html>

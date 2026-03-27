@@ -611,6 +611,195 @@ class ColorPalette {
             this.hexGrid.saveState();
         }
     }
+
+    /**
+     * Quantize the grid into the configured palette while preserving source color clusters.
+     * This is intended for Voxel-oriented pages where hue consistency matters more than
+     * naive per-cell nearest-color mapping.
+     */
+    quantizeGridToFullPalette(options = {}) {
+        if (!this.hexGrid || !Array.isArray(this.fullPalette) || this.fullPalette.length === 0) {
+            return;
+        }
+
+        const defaultColor = ColorUtils.normalizeHex(this.hexGrid.defaultColor);
+        const rawCounts = options.sourceColorCounts || this.hexGrid.getColorCounts();
+        const colorCounts = {};
+
+        Object.keys(rawCounts).forEach((rawColor) => {
+            const color = ColorUtils.normalizeHex(rawColor);
+            colorCounts[color] = (colorCounts[color] || 0) + rawCounts[rawColor];
+        });
+
+        const sourceColors = Object.keys(colorCounts);
+        if (sourceColors.length === 0) {
+            return;
+        }
+
+        const palettePool = this.fullPalette.map((color) => ColorUtils.normalizeHex(color));
+        const usedPaletteColors = new Set();
+        const rankedSourceColors = sourceColors.sort((left, right) => colorCounts[right] - colorCounts[left]);
+        const colorMap = {};
+
+        rankedSourceColors.forEach((sourceColor) => {
+            if (sourceColor === defaultColor && palettePool.includes(defaultColor)) {
+                colorMap[sourceColor] = defaultColor;
+                usedPaletteColors.add(defaultColor);
+                return;
+            }
+
+            const rankedPalette = palettePool
+                .map((paletteColor) => {
+                    return {
+                        color: paletteColor,
+                        score: ColorUtils.perceptualColorScore(sourceColor, paletteColor)
+                    };
+                })
+                .sort((left, right) => left.score - right.score);
+
+            const firstUnused = rankedPalette.find((candidate) => !usedPaletteColors.has(candidate.color));
+            const chosen = firstUnused ? firstUnused.color : rankedPalette[0].color;
+            colorMap[sourceColor] = chosen;
+            usedPaletteColors.add(chosen);
+        });
+
+        let changed = false;
+        Object.keys(this.hexGrid.gemColors).forEach((key) => {
+            const currentColor = ColorUtils.normalizeHex(this.hexGrid.gemColors[key] || defaultColor);
+            const mappedColor = colorMap[currentColor] || currentColor;
+            if (currentColor !== mappedColor) {
+                changed = true;
+            }
+            this.hexGrid.gemColors[key] = mappedColor;
+        });
+
+        if (changed) {
+            this.hexGrid.render();
+            this.hexGrid.saveState();
+        }
+    }
+
+    buildConnectedColorClusters(options = {}) {
+        if (!this.hexGrid) {
+            return [];
+        }
+
+        const defaultColor = ColorUtils.normalizeHex(this.hexGrid.defaultColor);
+        const visited = new Set();
+        const clusters = [];
+        const similarityThreshold = options.similarityThreshold || 18;
+        const darkThreshold = options.darkSimilarityThreshold || 12;
+        const width = this.hexGrid.cols;
+        const height = this.hexGrid.rows;
+
+        const shouldConnect = (baseColor, candidateColor) => {
+            const baseRgb = ColorUtils.hexToRgb(baseColor);
+            const candidateRgb = ColorUtils.hexToRgb(candidateColor);
+            const baseHsv = ColorUtils.rgbToHsv(baseRgb.r, baseRgb.g, baseRgb.b);
+            const candidateHsv = ColorUtils.rgbToHsv(candidateRgb.r, candidateRgb.g, candidateRgb.b);
+            const distance = ColorUtils.colorDistance(baseRgb, candidateRgb);
+            const hueDiffRaw = Math.abs(baseHsv.h - candidateHsv.h);
+            const hueDistance = Math.min(hueDiffRaw, 1 - hueDiffRaw);
+            const valueDiff = Math.abs(baseHsv.v - candidateHsv.v);
+            const activeThreshold = (baseHsv.v < 0.25 || candidateHsv.v < 0.25) ? darkThreshold : similarityThreshold;
+
+            if (distance > activeThreshold) {
+                return false;
+            }
+
+            if (hueDistance > 0.08 && baseHsv.s > 0.12 && candidateHsv.s > 0.12) {
+                return false;
+            }
+
+            if (valueDiff > 0.18) {
+                return false;
+            }
+
+            return true;
+        };
+
+        const getNeighbors = (x, y) => {
+            return [
+                { x: x - 1, y: y },
+                { x: x + 1, y: y },
+                { x: x, y: y - 1 },
+                { x: x, y: y + 1 }
+            ].filter((neighbor) => {
+                return neighbor.x >= 0 && neighbor.x < width && neighbor.y >= 0 && neighbor.y < height;
+            });
+        };
+
+        for (let row = 0; row < height; row += 1) {
+            for (let col = 0; col < width; col += 1) {
+                const startKey = `${col},${row}`;
+                if (visited.has(startKey)) {
+                    continue;
+                }
+
+                const startColor = ColorUtils.normalizeHex(this.hexGrid.gemColors[startKey] || defaultColor);
+                if (startColor === defaultColor) {
+                    visited.add(startKey);
+                    continue;
+                }
+
+                const queue = [{ x: col, y: row }];
+                const pixels = [];
+                let sumR = 0;
+                let sumG = 0;
+                let sumB = 0;
+                let count = 0;
+
+                visited.add(startKey);
+
+                while (queue.length > 0) {
+                    const current = queue.shift();
+                    const currentKey = `${current.x},${current.y}`;
+                    const currentColor = ColorUtils.normalizeHex(this.hexGrid.gemColors[currentKey] || defaultColor);
+                    const currentRgb = ColorUtils.hexToRgb(currentColor);
+
+                    pixels.push({ x: current.x, y: current.y });
+                    sumR += currentRgb.r;
+                    sumG += currentRgb.g;
+                    sumB += currentRgb.b;
+                    count += 1;
+
+                    getNeighbors(current.x, current.y).forEach((neighbor) => {
+                        const neighborKey = `${neighbor.x},${neighbor.y}`;
+                        if (visited.has(neighborKey)) {
+                            return;
+                        }
+
+                        const neighborColor = ColorUtils.normalizeHex(this.hexGrid.gemColors[neighborKey] || defaultColor);
+                        if (neighborColor === defaultColor) {
+                            visited.add(neighborKey);
+                            return;
+                        }
+
+                        if (!shouldConnect(startColor, neighborColor)) {
+                            return;
+                        }
+
+                        visited.add(neighborKey);
+                        queue.push(neighbor);
+                    });
+                }
+
+                if (pixels.length > 0) {
+                    clusters.push({
+                        color: startColor,
+                        representativeColor: ColorUtils.rgbToHex(
+                            Math.round(sumR / count),
+                            Math.round(sumG / count),
+                            Math.round(sumB / count)
+                        ),
+                        pixels: pixels
+                    });
+                }
+            }
+        }
+
+        return clusters;
+    }
     
     /**
      * Update the selected color display
