@@ -65,6 +65,7 @@
                         <button id="savePixelGrid" type="button">Save 50x50 PNG</button>
                         <button id="saveGrid" type="button">Save Grid</button>
                         <button id="loadGrid" type="button">Load Grid</button>
+                        <button id="downloadPatternJson" type="button" disabled>Download Pattern JSON</button>
                     </div>
                     <div class="control-group" style="margin-top: 8px;">
                         <input
@@ -78,14 +79,9 @@
                         <button id="loadFromUrl" type="button" style="width: 100%;">Load from URL</button>
                     </div>
                     <div id="urlLoadStatus" style="font-size: 11px; color: #c88; margin-top: 4px; min-height: 16px;"></div>
-                    <div class="control-group" style="display: none;" id="directImageUrlGroup">
-                        <label for="directImageUrl" style="font-size: 11px;">Direct image URL:</label>
-                        <input
-                            type="text"
-                            id="directImageUrl"
-                            placeholder="https://example.com/image.png"
-                            style="width: 100%; box-sizing: border-box; font-size: 11px;"
-                        >
+                    <div id="fetchedImageSection" style="display:none; margin-top: 8px;">
+                        <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">Fetched Image:</div>
+                        <canvas id="fetchedImagePreview" style="display: block; max-width: 100%; border: 1px solid #444; image-rendering: pixelated;"></canvas>
                     </div>
                 </div>
             </div>
@@ -139,6 +135,9 @@
     <script src="js/colorPicker.js"></script>
     <script src="js/imageProcessing.js"></script>
     <script src="js/urlFetcher.js"></script>
+    <script src="js/patternSampler.js"></script>
+    <script src="js/patternImport.js"></script>
+    <script src="js/patternExport.js"></script>
     <script src="js/appShared.js"></script>
     <script src="js/appUrlImport.js"></script>
 </body>

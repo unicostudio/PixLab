@@ -4,6 +4,8 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     var currentSlug = 'pattern';
+    var currentPatternName = 'Imported Pattern';
+    var currentPatternAuthor = 'PixLab';
     var isLoading = false;
 
     // ── Grid helpers ──────────────────────────────────────────────────────────
@@ -27,10 +29,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function syncSizeUI(gemGrid) {
-        document.getElementById('gridCols').value = String(gemGrid.cols);
-        document.getElementById('gridRows').value = String(gemGrid.rows);
+        syncSizeUIValues(gemGrid.cols, gemGrid.rows);
+    }
+
+    function syncSizeUIValues(cols, rows) {
+        document.getElementById('gridCols').value = String(cols);
+        document.getElementById('gridRows').value = String(rows);
         document.getElementById('savePixelGrid').textContent =
-            'Save ' + gemGrid.cols + 'x' + gemGrid.rows + ' PNG';
+            'Save ' + cols + 'x' + rows + ' PNG';
     }
 
     function gridHasUserContent(gemGrid) {
@@ -57,59 +63,159 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.color = isError ? '#c88' : '#8c8';
     }
 
-    // ── Pattern image sampling ────────────────────────────────────────────────
-    // For pre-pixelated bead pattern images (kandipatterns style), sample the
-    // center of each cell rather than downscaling the whole image, so grid
-    // lines don't bleed into the color readings.
-
-    function sampleCellColor(ctx, imgWidth, imgHeight, col, row, cols, rows) {
-        var cellW = imgWidth / cols;
-        var cellH = imgHeight / rows;
-        var inset = 0.18;
-        var sx = Math.floor(col * cellW + cellW * inset);
-        var sy = Math.floor(row * cellH + cellH * inset);
-        var sw = Math.max(1, Math.floor(cellW * (1 - 2 * inset)));
-        var sh = Math.max(1, Math.floor(cellH * (1 - 2 * inset)));
-
-        var data = ctx.getImageData(sx, sy, sw, sh).data;
-        var r = 0, g = 0, b = 0, count = 0;
-        for (var i = 0; i < data.length; i += 4) {
-            if (data[i + 3] === 0) continue;
-            r += data[i]; g += data[i + 1]; b += data[i + 2];
-            count++;
-        }
-        if (count === 0) return '#FFFFFF';
-        return ColorUtils.rgbToHex(Math.round(r / count), Math.round(g / count), Math.round(b / count));
-    }
-
-    function findNearestPaletteColor(hexColor, palette) {
-        if (!palette || palette.length === 0) return hexColor;
-        var rgb = ColorUtils.hexToRgb(hexColor);
-        var best = palette[0];
-        var bestDist = Infinity;
-        for (var i = 0; i < palette.length; i++) {
-            var d = ColorUtils.colorDistance(rgb, ColorUtils.hexToRgb(palette[i]));
-            if (d < bestDist) { bestDist = d; best = palette[i]; }
-        }
-        return best;
-    }
-
-    function processPatternImage(img, gemGrid, colorPalette) {
-        var canvas = document.createElement('canvas');
+    function drawFetchedImagePreview(img) {
+        var canvas = document.getElementById('fetchedImagePreview');
+        var section = document.getElementById('fetchedImageSection');
         canvas.width = img.width;
         canvas.height = img.height;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        section.style.display = 'block';
+    }
 
-        var palette = colorPalette.fullPalette || [];
-        for (var row = 0; row < gemGrid.rows; row++) {
-            for (var col = 0; col < gemGrid.cols; col++) {
-                var raw = sampleCellColor(ctx, img.width, img.height, col, row, gemGrid.cols, gemGrid.rows);
-                gemGrid.gemColors[col + ',' + row] = findNearestPaletteColor(raw, palette);
+    function clearFetchedImagePreview() {
+        document.getElementById('fetchedImageSection').style.display = 'none';
+    }
+
+    function buildSourceMetadata(urlValue) {
+        var safeSlug = UrlFetcher.extractSlug(urlValue) || 'pattern';
+        var name = 'Imported Pattern';
+        var author = 'PixLab';
+
+        try {
+            var parsedUrl = new URL(urlValue);
+            var segments = parsedUrl.pathname.split('/').filter(function(segment) {
+                return segment.length > 0;
+            });
+            author = parsedUrl.hostname.replace(/^www\./, '') || 'PixLab';
+            if (segments.length > 0) {
+                name = safeSlug;
             }
+        } catch (error) {
+            author = 'PixLab';
         }
-        gemGrid.render();
-        gemGrid.saveState();
+
+        return {
+            slug: safeSlug,
+            name: name,
+            author: author
+        };
+    }
+
+    function getImportErrorMessage(error) {
+        if (error && typeof error.message === 'string') {
+            if (error.message === 'All proxies failed.' ||
+                error.message.indexOf('Proxy returned ') === 0) {
+                return 'Could not fetch the source page.';
+            }
+            return error.message;
+        }
+
+        return 'Could not fetch the source page.';
+    }
+
+    function loadImageThroughProxyChain(imageUrl) {
+        return new Promise(function(resolve, reject) {
+            var proxiedUrls = UrlFetcher.proxyImageUrls(imageUrl);
+
+            function tryUrl(index) {
+                if (index >= proxiedUrls.length) {
+                    reject(new Error('Pattern image could not be loaded.'));
+                    return;
+                }
+
+                var img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = function() {
+                    resolve(img);
+                };
+                img.onerror = function() {
+                    tryUrl(index + 1);
+                };
+                img.src = proxiedUrls[index];
+            }
+
+            tryUrl(0);
+        });
+    }
+
+    function downloadJsonData(data, filename) {
+        var link = document.createElement('a');
+        link.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data, null, 2));
+        link.download = filename;
+        link.click();
+    }
+
+    function finalizeImportedPattern(appState, metadata) {
+        currentSlug = metadata.slug;
+        currentPatternName = metadata.name;
+        currentPatternAuthor = metadata.author;
+        appState.colorPalette.originalImageColors = appState.gemGrid.getColorCounts();
+        appState.colorPalette.createPaletteUI({ skipGridSave: true });
+        appState.colorPalette.updateColorCountDisplay();
+        document.getElementById('downloadPatternJson').disabled = false;
+    }
+
+    function importPatternFromUrl(appState, helpers, urlValue) {
+        var metadata = buildSourceMetadata(urlValue);
+
+        return UrlFetcher.fetchPageHtml(urlValue)
+            .then(function(html) {
+                var sizeData = UrlFetcher.parsePatternSize(html);
+                if (!sizeData) {
+                    throw new Error('Pattern size could not be parsed from the page.');
+                }
+
+                syncSizeUIValues(sizeData.cols, sizeData.rows);
+
+                var imageUrl = UrlFetcher.extractImageUrl(html, urlValue);
+                if (!imageUrl) {
+                    throw new Error('Pattern image not found on the page.');
+                }
+
+                return loadImageThroughProxyChain(imageUrl)
+                    .then(function(image) {
+                        return {
+                            image: image,
+                            sizeData: sizeData,
+                            metadata: metadata
+                        };
+                    });
+            })
+            .then(function(importData) {
+                return Promise.resolve(appState.colorPalette.paletteLoaded)
+                    .catch(function() {
+                        return appState.colorPalette.fullPalette;
+                    })
+                    .then(function() {
+                        drawFetchedImagePreview(importData.image);
+                        var sampleResult = PatternSampler.buildLegacyPatternFromImage({
+                            image: importData.image,
+                            rows: importData.sizeData.rows,
+                            cols: importData.sizeData.cols,
+                            name: importData.metadata.name,
+                            author: importData.metadata.author
+                        });
+                        var parsedPattern = PatternImport.parseLegacyPatternData(sampleResult);
+
+                        if (gridHasUserContent(appState.gemGrid) &&
+                            !confirm('Grid will be replaced. Continue?')) {
+                            return { cancelled: true };
+                        }
+
+                        helpers.resetDerivedImageState();
+                        PatternImport.applyPatternToApp(appState, parsedPattern, null, {
+                            usePatternPalette: false,
+                            replaceGrid: function(cols, rows) {
+                                replaceGrid(appState, cols, rows);
+                            }
+                        });
+                        finalizeImportedPattern(appState, importData.metadata);
+                        setStatus('', false);
+                        PixLabApp.showTransientMessage('Pattern loaded.', 1200);
+
+                        return { cancelled: false };
+                    });
+            });
     }
 
     // ── bindExtraControls ─────────────────────────────────────────────────────
@@ -154,13 +260,31 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function bindDownloadPatternJson(appState) {
+        document.getElementById('downloadPatternJson').addEventListener('click', function() {
+            if (this.disabled) {
+                return;
+            }
+
+            try {
+                downloadJsonData(
+                    PatternExport.buildExternalPatternJson({
+                        gemGrid: appState.gemGrid,
+                        name: currentPatternName,
+                        author: currentPatternAuthor
+                    }),
+                    currentSlug + '_pattern.json'
+                );
+            } catch (error) {
+                alert('Export error: ' + error.message);
+            }
+        });
+    }
+
     function bindLoadFromUrl(appState, helpers) {
         var loadBtn = document.getElementById('loadFromUrl');
 
         document.getElementById('urlInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') { loadBtn.click(); }
-        });
-        document.getElementById('directImageUrl').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') { loadBtn.click(); }
         });
 
@@ -169,18 +293,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             var urlValue = document.getElementById('urlInput').value.trim();
             setStatus('', false);
+            clearFetchedImagePreview();
 
             // Step 1 — Validation
             if (!urlValue || !urlValue.startsWith('http')) {
                 setStatus('Enter a valid URL starting with http.', true);
                 return;
             }
-
-            // Step 2 — Slug extraction (runs on every click, including retries)
-            currentSlug = UrlFetcher.extractSlug(urlValue);
-
-            var directImageUrlInput = document.getElementById('directImageUrl');
-            var directUrl = directImageUrlInput.value.trim();
 
             isLoading = true;
             var btn = loadBtn;
@@ -194,127 +313,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.textContent = originalLabel;
             }
 
-            function loadImageFromUrl(resolvedImageUrl, tryDirect) {
-                var img = new Image();
-                img.crossOrigin = 'anonymous';
-
-                function tryProxy() {
-                    var urls = UrlFetcher.proxyImageUrls(resolvedImageUrl);
-                    var idx = 0;
-                    function next() {
-                        if (idx >= urls.length) {
-                            setStatus('Image could not be loaded. Try a direct image URL below.', true);
-                            document.getElementById('directImageUrlGroup').style.display = 'block';
-                            restoreButton();
-                            return;
-                        }
-                        var proxied = new Image();
-                        proxied.crossOrigin = 'anonymous';
-                        proxied.onload = function() { onImageReady(proxied); };
-                        proxied.onerror = function() { idx += 1; next(); };
-                        proxied.src = urls[idx];
-                    }
-                    next();
-                }
-
-                function onImageReady(loadedImg) {
-                    // Step 7 — Size validation
-                    var size = validateSize(
-                        document.getElementById('gridCols').value,
-                        document.getElementById('gridRows').value
-                    );
-                    if (!size) {
-                        setStatus('Invalid size — enter valid cols and rows.', true);
-                        restoreButton();
-                        return;
-                    }
-
-                    // Step 8 — Grid preparation
-                    if (gridHasUserContent(appState.gemGrid) &&
-                        !confirm('Grid will be replaced. Continue?')) {
-                        restoreButton();
-                        return;
-                    }
-
-                    helpers.resetDerivedImageState();
-                    replaceGrid(appState, size.cols, size.rows);
-
-                    // Step 9 — Image processing
-                    Promise.resolve(appState.colorPalette.paletteLoaded)
-                        .catch(function() { return appState.colorPalette.fullPalette; })
-                        .then(function() {
-                            processPatternImage(loadedImg, appState.gemGrid, appState.colorPalette);
-                            setTimeout(function() {
-                                appState.colorPalette.constrainGridToFullPalette();
-                                appState.colorPalette.originalImageColors = appState.gemGrid.getColorCounts();
-                                appState.colorPalette.createPaletteUI({ skipGridSave: true });
-                                appState.colorPalette.updateColorCountDisplay();
-                                PixLabApp.showTransientMessage('Pattern loaded.', 1200);
-                                setStatus('', false);
-                                document.getElementById('directImageUrlGroup').style.display = 'none';
-                                restoreButton();
-                            }, 0);
-                        });
-                }
-
-                if (tryDirect) {
-                    img.onload = function() { onImageReady(img); };
-                    img.onerror = function() { tryProxy(); };
-                    img.src = resolvedImageUrl;
-                } else {
-                    img.onload = function() { onImageReady(img); };
-                    img.onerror = function() {
-                        setStatus('Image could not be loaded. Try a direct image URL below.', true);
-                        document.getElementById('directImageUrlGroup').style.display = 'block';
-                        restoreButton();
-                    };
-                    img.src = UrlFetcher.proxyImageUrl(resolvedImageUrl);
-                }
-            }
-
-            // CORS-fallback: if directUrl is filled, try direct load first
-            if (directUrl) {
-                var size = validateSize(
-                    document.getElementById('gridCols').value,
-                    document.getElementById('gridRows').value
-                );
-                if (!size) {
-                    setStatus('Enter valid cols and rows before loading.', true);
+            importPatternFromUrl(appState, helpers, urlValue)
+                .then(function(result) {
                     restoreButton();
-                    return;
-                }
-                loadImageFromUrl(directUrl, true);
-                return;
-            }
-
-            // Step 3 — HTML fetch via CORS proxy
-            UrlFetcher.fetchPageHtml(urlValue)
-                .then(function(html) {
-                    // Step 4 — Size parse
-                    var sizeData = UrlFetcher.parsePatternSize(html);
-                    if (sizeData) {
-                        document.getElementById('gridCols').value = String(sizeData.cols);
-                        document.getElementById('gridRows').value = String(sizeData.rows);
-                        document.getElementById('savePixelGrid').textContent =
-                            'Save ' + sizeData.cols + 'x' + sizeData.rows + ' PNG';
-                    } else {
-                        setStatus('Size not found — enter cols/rows manually.', true);
-                    }
-
-                    // Step 5 — Image URL extraction
-                    var imageUrl = UrlFetcher.extractImageUrl(html, urlValue);
-                    if (!imageUrl) {
-                        setStatus('Image not found on page.', true);
-                        restoreButton();
+                    if (result && result.cancelled) {
                         return;
                     }
-
-                    // Step 6 — Load image
-                    loadImageFromUrl(imageUrl);
                 })
-                .catch(function() {
-                    setStatus('Could not fetch page. Enter a direct image URL below.', true);
-                    document.getElementById('directImageUrlGroup').style.display = 'block';
+                .catch(function(error) {
+                    setStatus(getImportErrorMessage(error), true);
+                    clearFetchedImagePreview();
                     restoreButton();
                 });
         });
@@ -339,6 +347,7 @@ document.addEventListener('DOMContentLoaded', function() {
         bindExtraControls: function(appState, helpers) {
             bindApplyGridSize(appState, helpers);
             bindSavePixelGrid(appState);
+            bindDownloadPatternJson(appState);
             bindLoadFromUrl(appState, helpers);
         },
         loadGridData: function(appState, gridData, helpers) {
@@ -352,7 +361,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 !confirm('Loading this grid will replace the current grid. Continue?')) {
                 return;
             }
-            currentSlug = 'pattern';
             helpers.resetDerivedImageState();
             replaceGrid(appState, size.cols, size.rows);
             appState.gemGrid.loadFromJSON(gridData);
